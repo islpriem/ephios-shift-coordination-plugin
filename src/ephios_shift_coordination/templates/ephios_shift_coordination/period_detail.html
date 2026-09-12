@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{{ period.template_snapshot.title }}{% endblock %}
+{% block content %}
+    <h1>{{ period.template_snapshot.title }}</h1>
+    <p>{{ period.start_date }} – {{ period.end_date }} · {{ period.get_state_display }}</p>
+    <p>{% translate "The events are visible. No survey has been opened." %}</p>
+    <ul>
+        {% for item in events %}
+            <li>
+                {{ item.date }}:
+                {% if item.event %}
+                    <a href="{{ item.event.get_absolute_url }}">{{ item.event.title }}</a>
+                {% elif item.missing %}
+                    {% translate "Conflict: the original event was deleted." %}
+                {% else %}
+                    {% translate "You do not have permission to view this event." %}
+                {% endif %}
+            </li>
+        {% endfor %}
+    </ul>
+{% endblock %}

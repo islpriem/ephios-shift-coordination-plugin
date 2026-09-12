@@ -30,7 +30,7 @@ dev = [
     "coverage>=7.13,<8",
     "djlint>=1.36,<2",
     "playwright>=1.55,<2",
-    "psycopg[binary]>=3.2,<4",
+    "psycopg2-binary>=2.9.11,<3",
     "pytest>=8.4,<10",
     "pytest-django>=4.11,<5",
     "ruff>=0.15.8,<1",
@@ -40,7 +40,7 @@ dev = [
 DJANGO_SETTINGS_MODULE = "tests.settings"
 pythonpath = ["."]
 testpaths = ["tests"]
-addopts = "--strict-markers --basetemp=.local/tmp/pytest -m 'not e2e'"
+addopts = "--strict-markers --basetemp=.local/tmp/pytest -m 'not e2e and not postgres'"
 markers = ["e2e: browser tests against the isolated Compose stack", "postgres: requires PostgreSQL", "performance: bounded optimizer load tests"]
 filterwarnings = ['error:DateTimeField .* received a naive datetime']
 

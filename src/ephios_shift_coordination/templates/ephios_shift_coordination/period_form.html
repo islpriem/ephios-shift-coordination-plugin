@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% load crispy_forms_filters i18n static %}
+{% block title %}
+    {% translate "Create period" %}
+{% endblock %}
+{% block content %}
+    <link rel="stylesheet"
+          href="{% static 'ephios_shift_coordination/planning.css' %}">
+    <h1>{% translate "Create period" %}</h1>
+    <form method="post">
+        {% csrf_token %}
+        {{ form|crispy }}
+        <button class="btn btn-secondary"
+                name="action"
+                value="calendar"
+                type="submit">{% translate "Calculate date selection" %}</button>
+        {% if days %}
+            <input type="hidden" name="selection_ready" value="1">
+            <h2 class="mt-4">{% translate "Selected dates" %}</h2>
+            <p>{% translate "Select or deselect individual dates, including holidays. Recalculating replaces this selection." %}</p>
+            <div class="planning-calendar">
+                {% for day in days %}
+                    {% ifchanged day.date.month %}<h3 class="planning-month">{{ day.date|date:"F Y" }}</h3>{% endifchanged %}
+                    <label class="planning-day planning-column-{{ day.column }}">
+                        <input type="checkbox"
+                               name="dates"
+                               value="{{ day.date|date:'Y-m-d' }}"
+                               {% if day.selected %}checked{% endif %}>
+                        {{ day.date|date:"D, j." }}
+                        {% if day.holiday %}<small class="d-block">{{ day.holiday }}</small>{% endif %}
+                    </label>
+                {% endfor %}
+            </div>
+            <button class="btn btn-secondary mt-3"
+                    name="action"
+                    value="preview"
+                    type="submit">{% translate "Update preview" %}</button>
+            {% if preview %}
+                <h2 class="mt-3">{% translate "Preview" %}</h2>
+                <p>{% translate "Creating the period makes these events visible in ephios. Self-signup stays disabled." %}</p>
+                {% for day in preview %}
+                    <h3>{{ day.date }}</h3>
+                    <ul>
+                        {% for shift in day.shifts %}
+                            <li>{{ shift.label }}: {{ shift.start_time }} – {{ shift.end_time }} ({% translate "Minimum staffing" %}: {{ shift.structure_configuration.minimum_number_of_participants }})</li>
+                        {% endfor %}
+                    </ul>
+                {% endfor %}
+                <button class="btn btn-primary"
+                        name="action"
+                        value="create"
+                        type="submit">{% translate "Create events" %}</button>
+            {% endif %}
+        {% endif %}
+    </form>
+{% endblock %}

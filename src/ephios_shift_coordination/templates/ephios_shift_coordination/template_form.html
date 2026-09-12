@@ -1,0 +1,30 @@
+{% extends "core/settings/settings_base.html" %}
+{% load crispy_forms_filters i18n static %}
+{% block settings_content %}
+    <h2>{% translate "Service template" %}</h2>
+    <form method="post" id="template-form">
+        {% csrf_token %}
+        {{ form|crispy }}
+        <h3>{% translate "Shifts" %}</h3>
+        {{ shifts.management_form }}
+        {{ shifts.non_form_errors }}
+        <div id="shift-forms">
+            {% for shift in shifts %}
+                <fieldset class="border rounded p-3 mb-3">
+                    <legend>{% translate "Shift" %} {{ forloop.counter }}</legend>
+                    {{ shift|crispy }}
+                </fieldset>
+            {% endfor %}
+        </div>
+        <template id="empty-shift-form">
+            <fieldset class="border rounded p-3 mb-3">
+                {{ shifts.empty_form|crispy }}
+            </fieldset>
+        </template>
+        <button class="btn btn-secondary"
+                type="button"
+                id="add-shift">{% translate "Add shift" %}</button>
+        <button class="btn btn-primary" type="submit">{% translate "Save" %}</button>
+    </form>
+    <script src="{% static 'ephios_shift_coordination/templates.js' %}" defer></script>
+{% endblock %}

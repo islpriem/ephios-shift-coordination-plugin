@@ -1,4 +1,4 @@
-.PHONY: setup format test check e2e build dev-up dev-down
+.PHONY: setup format test check e2e build dev-up dev-down dev-import-demo
 
 setup:
 	./scripts/run python3 scripts/project.py setup
@@ -25,3 +25,6 @@ dev-up:
 
 dev-down:
 	./scripts/run python3 scripts/project.py down
+
+dev-import-demo:
+	./scripts/run python3 scripts/project.py import-demo

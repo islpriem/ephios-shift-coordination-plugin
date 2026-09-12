@@ -1,0 +1,14 @@
+{% extends "core/settings/settings_base.html" %}
+{% load i18n %}
+{% block settings_content %}
+    <h2>{% translate "Service templates" %}</h2>
+    <a class="btn btn-primary"
+       href="{% url 'ephios_shift_coordination:template_create' %}">{% translate "Create template" %}</a>
+    <ul class="mt-3">
+        {% for template in templates %}
+            <li><a href="{% url 'ephios_shift_coordination:template_edit' template.pk %}">{{ template.title }}</a> — {{ template.shifts.count }} {% translate "Shifts" %}</li>
+        {% empty %}
+            <li>{% translate "No service templates configured." %}</li>
+        {% endfor %}
+    </ul>
+{% endblock %}

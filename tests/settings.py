@@ -11,6 +11,7 @@ os.environ.update(
         "SECRET_KEY": "isolated-test-key-not-for-production",
         "DATABASE_URL": os.environ.get("TEST_DATABASE_URL", "sqlite://:memory:"),
         "EMAIL_URL": "memorymail://",
+        "CACHE_URL": "locmemcache://",
         "DEFAULT_FROM_EMAIL": "noreply@example.invalid",
         "SERVER_EMAIL": "server@example.invalid",
         "ADMINS": "Test Admin <admin@example.invalid>",
@@ -23,3 +24,5 @@ from ephios.settings import *
 LANGUAGE_CODE = "en"
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 LOGGING = {"version": 1, "disable_existing_loggers": False}
+COMPRESS_ENABLED = False
+COMPRESS_PRECOMPILERS = []

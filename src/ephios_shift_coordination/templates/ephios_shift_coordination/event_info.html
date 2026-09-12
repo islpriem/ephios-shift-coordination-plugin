@@ -1,0 +1,5 @@
+{% load i18n %}
+<p>{% translate "Planning period" %}:
+    {% if can_plan %}<a href="{{ period.get_absolute_url }}">{{ period.start_date }} – {{ period.end_date }}</a>
+{% else %}{{ period.start_date }} – {{ period.end_date }}{% endif %}
+</p>

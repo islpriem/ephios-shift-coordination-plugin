@@ -7,10 +7,275 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: apps.py
+msgid "A service template needs at least one shift."
+msgstr "Eine Dienstvorlage benötigt mindestens eine Schicht."
+
+msgid "Add shift"
+msgstr "Schicht hinzufügen"
+
+msgid "Administrators assign this permission in Planning settings. Native event creation and group publishing rights are also required."
+msgstr "Administratoren vergeben dieses Recht in den Planungseinstellungen. Die ephios-Rechte zur Veranstaltungsanlage und Gruppenveröffentlichung sind zusätzlich erforderlich."
+
+msgid "Availability surveys and service planning for ephios"
+msgstr "Verfügbarkeitsumfragen und Dienstplanung für ephios"
+
+msgid "Calculate date selection"
+msgstr "Datumsauswahl berechnen"
+
+msgid "Calculation budget in seconds"
+msgstr "Rechenbudget in Sekunden"
+
+msgid "Changes apply to new periods. Existing periods retain their settings."
+msgstr "Änderungen gelten für neue Intervalle. Bestehende Intervalle behalten ihre Einstellungen."
+
+msgid "Choose a valid holiday country and region."
+msgstr "Bitte ein gültiges Feiertagsland und eine Region auswählen."
+
+msgid "Choose distinct weekdays."
+msgstr "Bitte unterschiedliche Wochentage auswählen."
+
+msgid "Choose the same or next day."
+msgstr "Bitte denselben Tag oder den Folgetag auswählen."
+
+msgid "Comma-separated positive day offsets; leave empty for no reminders."
+msgstr "Positive Tagesabstände mit Kommas trennen; für keine Erinnerungen leer lassen."
+
+msgid "Conflict: the original event was deleted."
+msgstr "Konflikt: Die ursprüngliche Veranstaltung wurde gelöscht."
+
+msgid "Coordinators also need native event creation and publishing rights for the selected visibility groups."
+msgstr "Die Koordination benötigt zusätzlich die ephios-Rechte zur Veranstaltungserstellung und Veröffentlichung für die ausgewählten Sichtbarkeitsgruppen."
+
+msgid "Create events"
+msgstr "Veranstaltungen erstellen"
+
+msgid "Create period"
+msgstr "Intervall erstellen"
+
+msgid "Create template"
+msgstr "Vorlage erstellen"
+
+msgid "Creating the period makes these events visible in ephios. Self-signup stays disabled."
+msgstr "Beim Erstellen des Intervalls werden diese Veranstaltungen in ephios sichtbar. Die Selbstanmeldung bleibt deaktiviert."
+
+msgid "Description"
+msgstr "Beschreibung"
+
+msgid "Enable the native manual signup flow and uniform shift structure."
+msgstr "Bitte die ephios-Plugins für manuelle Anmeldung und einheitliche Schichtstruktur aktivieren."
+
+msgid "End date"
+msgstr "Enddatum"
+
+msgid "End day"
+msgstr "Endtag"
+
+msgid "End time"
+msgstr "Endzeit"
+
+msgid "End time must be after the start."
+msgstr "Das Ende muss nach dem Beginn liegen."
+
+msgid "Enter distinct positive reminder offsets."
+msgstr "Bitte unterschiedliche positive Erinnerungsabstände eingeben."
+
+msgid "Enter whole numbers separated by commas."
+msgstr "Bitte ganze Zahlen mit Kommas getrennt eingeben."
+
+msgid "Event type"
+msgstr "Veranstaltungstyp"
+
+msgid "Exclude holidays"
+msgstr "Feiertage ausschließen"
+
+msgid "Friday"
+msgstr "Freitag"
+
+msgid "Groups allowed to manage planning"
+msgstr "Gruppen mit Planungsberechtigung"
+
+msgid "Holiday country"
+msgstr "Feiertagsland"
+
+msgid "Holiday region"
+msgstr "Feiertagsregion"
+
+msgid "Invalid selected date."
+msgstr "Ungültiges ausgewähltes Datum."
+
+msgid "Keep the next day free"
+msgstr "Folgetag freihalten"
+
+msgid "Label"
+msgstr "Bezeichnung"
+
+msgid "Location"
+msgstr "Ort"
+
+msgid "Manage shift planning"
+msgstr "Dienstplanung verwalten"
+
+msgid "Maximum staffing"
+msgstr "Höchstbesetzung"
+
+msgid "Maximum staffing must be at least the positive minimum."
+msgstr "Die Höchstbesetzung muss mindestens der positiven Mindestbesetzung entsprechen."
+
+msgid "Meeting time"
+msgstr "Treffzeit"
+
+msgid "Meeting time must not be after the start."
+msgstr "Die Treffzeit darf nicht nach dem Beginn liegen."
+
+msgid "Minimum staffing"
+msgstr "Mindestbesetzung"
+
+msgid "Monday"
+msgstr "Montag"
+
+msgid "Next day"
+msgstr "Folgetag"
+
+msgid "No planning periods yet."
+msgstr "Noch keine Planungsintervalle vorhanden."
+
+msgid "No service templates configured."
+msgstr "Noch keine Dienstvorlagen eingerichtet."
+
+msgid "Planning"
+msgstr "Planung"
+
+msgid "Planning period"
+msgstr "Planungsintervall"
+
+msgid "Planning settings"
+msgstr "Planungseinstellungen"
+
+msgid "Preparation"
+msgstr "Vorbereitung"
+
+msgid "Preview"
+msgstr "Vorschau"
+
+msgid "Preview and select the dates before creating events."
+msgstr "Bitte vor der Veranstaltungserstellung die Termine prüfen und auswählen."
+
+msgid "Published"
+msgstr "Veröffentlicht"
+
+msgid "Qualifications"
+msgstr "Qualifikationen"
+
+msgid "Reminder days before deadline"
+msgstr "Erinnerungen in Tagen vor Fristende"
+
+msgid "Response period in days"
+msgstr "Antwortfrist in Tagen"
+
+msgid "Responsible groups"
+msgstr "Verantwortliche Gruppen"
+
+msgid "Responsible persons"
+msgstr "Verantwortliche Personen"
+
+msgid "Same day"
+msgstr "Derselbe Tag"
+
+msgid "Saturday"
+msgstr "Samstag"
+
+msgid "Save"
+msgstr "Speichern"
+
+msgid "Select a region"
+msgstr "Region auswählen"
+
+msgid "Select distinct dates within the period."
+msgstr "Bitte unterschiedliche Termine innerhalb des Intervalls auswählen."
+
+msgid "Select or deselect individual dates, including holidays. Recalculating replaces this selection."
+msgstr "Einzelne Termine einschließlich Feiertagen an- oder abwählen. Eine Neuberechnung ersetzt diese Auswahl."
+
+msgid "Selected dates"
+msgstr "Ausgewählte Termine"
+
+msgid "Service template"
+msgstr "Dienstvorlage"
+
+msgid "Service templates"
+msgstr "Dienstvorlagen"
+
+msgid "Shift"
+msgstr "Schicht"
+
 msgid "Shift coordination"
 msgstr "Dienstplanung"
 
-#: apps.py
-msgid "Availability surveys and service planning for ephios"
-msgstr "Verfügbarkeitsumfragen und Dienstplanung für ephios"
+msgid "Shifts"
+msgstr "Schichten"
+
+msgid "Start date"
+msgstr "Anfangsdatum"
+
+msgid "Start time"
+msgstr "Beginn"
+
+msgid "Sunday"
+msgstr "Sonntag"
+
+msgid "Survey open"
+msgstr "Umfrage offen"
+
+msgid "Surveys"
+msgstr "Umfragen"
+
+msgid "The end date must not precede the start date."
+msgstr "Das Enddatum darf nicht vor dem Anfangsdatum liegen."
+
+msgid "The events are visible. No survey has been opened."
+msgstr "Die Veranstaltungen sind sichtbar. Es wurde noch keine Umfrage geöffnet."
+
+msgid "The local time %(time)s is ambiguous or does not exist in %(zone)s."
+msgstr "Die Ortszeit %(time)s ist in %(zone)s mehrdeutig oder existiert nicht."
+
+msgid "There are no surveys available yet."
+msgstr "Es sind noch keine Umfragen verfügbar."
+
+msgid "This creation key was already used for a different selection."
+msgstr "Dieser Erstellschlüssel wurde bereits für eine andere Auswahl verwendet."
+
+msgid "Thursday"
+msgstr "Donnerstag"
+
+msgid "Title"
+msgstr "Titel"
+
+msgid "Tuesday"
+msgstr "Dienstag"
+
+msgid "Update preview"
+msgstr "Vorschau aktualisieren"
+
+msgid "Visible for"
+msgstr "Sichtbar für"
+
+msgid "Wednesday"
+msgstr "Mittwoch"
+
+msgid "Weekdays"
+msgstr "Wochentage"
+
+msgid "Weekly limit"
+msgstr "Wochenlimit"
+
+msgid "You cannot publish events for the template's groups."
+msgstr "Du darfst für die Gruppen dieser Vorlage keine Veranstaltungen veröffentlichen."
+
+msgid "You do not have permission to view this event."
+msgstr "Du hast keine Berechtigung, diese Veranstaltung einzusehen."
+
+msgid "Each shift must belong to this template and appear only once."
+msgstr "Jede Schicht muss zu dieser Vorlage gehören und darf nur einmal vorkommen."
+
+msgid "All shifts in a new period must start in the future."
+msgstr "Alle Schichten eines neuen Intervalls müssen in der Zukunft beginnen."

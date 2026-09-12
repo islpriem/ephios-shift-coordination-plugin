@@ -1,0 +1,20 @@
+.planning-calendar {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 0.4rem;
+}
+.planning-month { grid-column: 1 / -1; }
+.planning-day { border: 1px solid #aaa; border-radius: 0.25rem; padding: 0.5rem; overflow-wrap: anywhere; }
+.planning-day:has(input:checked) { background: #e3f0e8; color: #162c22; }
+@media (max-width: 575px) {
+    .planning-calendar { gap: 0.15rem; }
+    .planning-day { padding: 0.2rem; font-size: 0.75rem; }
+}
+
+.planning-column-1 { grid-column: 1; }
+.planning-column-2 { grid-column: 2; }
+.planning-column-3 { grid-column: 3; }
+.planning-column-4 { grid-column: 4; }
+.planning-column-5 { grid-column: 5; }
+.planning-column-6 { grid-column: 6; }
+.planning-column-7 { grid-column: 7; }

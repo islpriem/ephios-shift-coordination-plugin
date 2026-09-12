@@ -19,7 +19,7 @@ def test_installed_plugin_appears_in_ephios_settings(language, label):
             page.locator('button[type="submit"]').click()
             page.wait_for_url(base + "/")
             page.goto(base + "/settings/instance/")
-            expect(page.get_by_text(label, exact=True)).to_be_visible()
+            expect(page.locator("form").get_by_text(label, exact=True)).to_be_visible()
         except Exception:
             page.screenshot(path=".local/test-results/e2e-failure.png", full_page=True)
             raise

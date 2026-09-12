@@ -3,6 +3,7 @@ import hashlib
 import os
 import shutil
 import subprocess
+from contextlib import contextmanager
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,7 +14,7 @@ def run(*args, **kwargs):
 
 
 def compose(*args, **kwargs):
-    root = ROOT / ".local/data" / os.environ.get("EPHIOS_STACK", "test")
+    root = ROOT / ".local/data" / os.environ.get("EPHIOS_STACK", "development")
     if not root.resolve().is_relative_to(ROOT):
         raise SystemExit("Container data must stay in the workspace.")
     for name in ("ephios", "postgres", "redis", "mail"):
@@ -55,11 +56,78 @@ def up():
     print(f"Local ephios: http://127.0.0.1:{os.environ.get('EPHIOS_HTTP_PORT', '8097')}")
 
 
+def import_demo(no_admin=False):
+    up()
+    compose(
+        "exec",
+        "-T",
+        "app",
+        "ephios",
+        "shell",
+        "-c",
+        (ROOT / "scripts/demo.py").read_text() + "\nseed_demo()",
+    )
+    print("100 demo members and the Dienst template are available.")
+    if not no_admin:
+        compose("exec", "app", "ephios", "createsuperuser")
+
+
+@contextmanager
+def e2e_environment():
+    values = {
+        "EPHIOS_STACK": "test",
+        "EPHIOS_HTTP_PORT": os.environ.get("EPHIOS_TEST_HTTP_PORT", "8099"),
+        "EPHIOS_MAIL_PORT": os.environ.get("EPHIOS_TEST_MAIL_PORT", "8100"),
+        "EPHIOS_DATABASE_PORT": os.environ.get("EPHIOS_TEST_DATABASE_PORT", "5499"),
+    }
+    previous = {key: os.environ.get(key) for key in values}
+    os.environ.update(values)
+    try:
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
 def e2e():
+    with e2e_environment():
+        run_e2e()
+
+
+def run_e2e():
     try:
         up()
         compose(
+            "exec",
+            "-T",
+            "app",
+            "ephios",
+            "shell",
+            "-c",
+            (ROOT / "scripts/demo.py").read_text() + "\nseed_demo()",
+        )
+        compose(
             "exec", "-T", "app", "ephios", "shell", "-c", (ROOT / "tests/e2e/seed.py").read_text()
+        )
+        run(
+            "uv",
+            "run",
+            "--locked",
+            "pytest",
+            "-m",
+            "postgres",
+            "tests/test_concurrency.py",
+            "-q",
+            "-o",
+            "faulthandler_timeout=45",
+            env={
+                **os.environ,
+                "TEST_DATABASE_URL": f"postgres://ephios:test-password@127.0.0.1:{os.environ['EPHIOS_DATABASE_PORT']}/ephios_test",
+            },
+            timeout=180,
         )
         run("uv", "run", "--locked", "pytest", "-m", "e2e", "tests/e2e", "-q")
         compose("restart", "app")
@@ -87,6 +155,15 @@ def e2e():
 def check():
     run("uv", "run", "--locked", "ruff", "check", ".")
     run("uv", "run", "--locked", "ruff", "format", "--check", ".")
+    run(
+        "uv",
+        "run",
+        "--locked",
+        "djlint",
+        "src/ephios_shift_coordination/templates",
+        "--check",
+        "--lint",
+    )
     run("uv", "run", "--locked", "coverage", "run", "-m", "pytest", "-q")
     run("uv", "run", "--locked", "coverage", "report")
     run("uv", "run", "--locked", "coverage", "xml")
@@ -114,8 +191,16 @@ def setup():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=("setup", "build", "up", "down", "e2e", "check"))
-    command = parser.parse_args().command
+    parser.add_argument(
+        "command", choices=("setup", "build", "up", "down", "e2e", "check", "import-demo")
+    )
+    parser.add_argument(
+        "--no-admin",
+        action="store_true",
+        help="Import demo data without interactive administrator creation.",
+    )
+    arguments = parser.parse_args()
+    command = arguments.command
     actions = {
         "setup": setup,
         "build": build,
@@ -123,5 +208,6 @@ if __name__ == "__main__":
         "down": lambda: compose("down"),
         "e2e": e2e,
         "check": check,
+        "import-demo": lambda: import_demo(no_admin=arguments.no_admin),
     }
     actions[command]()
