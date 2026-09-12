@@ -1,0 +1,23 @@
+name: Check
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Set up local tools and run checks
+        run: |
+          mkdir -p .local/bin .cache/uv-download
+          curl --fail --location https://github.com/astral-sh/uv/releases/download/0.12.8/uv-x86_64-unknown-linux-gnu.tar.gz -o .cache/uv-download/uv.tar.gz
+          tar -xzf .cache/uv-download/uv.tar.gz -C .cache/uv-download
+          cp .cache/uv-download/uv-x86_64-unknown-linux-gnu/uv .local/bin/uv
+          export PATH="$PWD/.local/bin:$PATH"
+          scripts/run uv python install 3.14
+          make setup
+          make check

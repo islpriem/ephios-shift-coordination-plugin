@@ -1,0 +1,28 @@
+#!/bin/sh
+set -eu
+
+project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
+cd "$project_root"
+python3 -B - "$project_root" <<'PY'
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1])
+for name in (
+    ".cache", ".cache/uv", ".cache/python", ".cache/pip", ".cache/ms-playwright",
+    ".local", ".local/tmp", ".local/test-results/coverage", ".local/build", ".venv", "dist",
+):
+    if not (root / name).resolve().is_relative_to(root):
+        raise SystemExit(f"Workspace path escapes the project: {name}")
+PY
+export UV_CACHE_DIR="$project_root/.cache/uv"
+export UV_PYTHON_INSTALL_DIR="$project_root/.cache/python"
+export UV_PROJECT_ENVIRONMENT="$project_root/.venv"
+export PIP_CACHE_DIR="$project_root/.cache/pip"
+export XDG_CACHE_HOME="$project_root/.cache"
+export TMPDIR="$project_root/.local/tmp"
+export PLAYWRIGHT_BROWSERS_PATH="$project_root/.cache/ms-playwright"
+export PYTHONDONTWRITEBYTECODE=1
+export COVERAGE_FILE="$project_root/.local/test-results/coverage/.coverage"
+mkdir -p "$TMPDIR" "$project_root/.local/test-results/coverage"
+exec "$@"
