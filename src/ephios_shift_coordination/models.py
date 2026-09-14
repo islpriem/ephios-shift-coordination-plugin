@@ -154,6 +154,7 @@ class PlanningPeriod(models.Model):
     template_snapshot = models.JSONField()
     state = models.CharField(max_length=16, choices=State.choices, default=State.PREPARATION)
     version = models.PositiveIntegerField(default=1)
+    draft_fingerprint = models.CharField(max_length=64, blank=True)
     opened_at = models.DateTimeField(null=True)
     deadline = models.DateTimeField(null=True)
     opened_structure = models.JSONField(default=dict)
@@ -266,3 +267,31 @@ class NotificationDispatch(models.Model):
                 fields=["period", "user", "kind", "key"], name="planning_unique_dispatch"
             )
         ]
+
+
+class DraftAssignment(models.Model):
+    period = models.ForeignKey(PlanningPeriod, models.CASCADE, related_name="draft_assignments")
+    planned_shift = models.ForeignKey(PlannedShift, models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, models.SET_NULL, null=True)
+    original_user_id = models.PositiveIntegerField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["planned_shift", "original_user_id"], name="planning_unique_assignment"
+            )
+        ]
+
+
+class RuleOverride(models.Model):
+    period = models.ForeignKey(PlanningPeriod, models.CASCADE, related_name="rule_overrides")
+    draft_version = models.PositiveIntegerField()
+    code = models.CharField(max_length=32)
+    token = models.CharField(max_length=64)
+    facts = models.JSONField()
+    reason = models.TextField(max_length=2000)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, models.SET_NULL, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]

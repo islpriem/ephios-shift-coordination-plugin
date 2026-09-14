@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% load i18n static %}
+{% block title %}
+    {% translate "Plan services" %}
+{% endblock %}
+{% block content %}
+    <link rel="stylesheet"
+          href="{% static 'ephios_shift_coordination/planning.css' %}">
+    <h1>{% translate "Plan services" %}: {{ period.template_snapshot.title }}</h1>
+    <p>{{ period.start_date }} – {{ period.end_date }}</p>
+    <p><a href="{{ period.get_absolute_url }}">{% translate "Responses and events" %}</a></p>
+    {% if error %}<p role="alert" class="alert alert-warning">{{ error }}</p>{% endif %}
+    {% if planning_data %}
+        <p>{% translate "Changes remain local until you save the shared draft. Saving creates no participations or emails." %}</p>
+        <form id="planning-editor"
+              data-validate-url="{% url 'ephios_shift_coordination:draft_validate' period.pk %}"
+              data-save-url="{% url 'ephios_shift_coordination:draft_save' period.pk %}"
+              data-start="{{ period.start_date|date:'Y-m-d' }}"
+              data-end="{{ period.end_date|date:'Y-m-d' }}"
+              data-selected="{% translate 'Selected' %}"
+              data-minimum="{% translate 'Minimum' %}"
+              data-maximum="{% translate 'Maximum' %}"
+              data-free="{% translate 'Free places' %}"
+              data-existing="{% translate 'Existing' %}"
+              data-draft="{% translate 'Draft' %}"
+              data-total="{% translate 'Total' %}"
+              data-no-response="{% translate 'Awaiting response' %}"
+              data-unqualified="{% translate 'Qualification missing' %}"
+              data-add-person="{% translate 'Add a person for a manual exception' %}"
+              data-add="{% translate 'Add person' %}"
+              data-remove="{% translate 'Remove invalid assignment' %}"
+              data-confirm="{% translate 'I confirm this exception' %}"
+              data-reason="{% translate 'Reason for this exception' %}"
+              data-dirty="{% translate 'Unsaved changes' %}"
+              data-checking="{% translate 'Checking current rules…' %}"
+              data-checked="{% translate 'Rules checked. Confirm any exceptions before saving.' %}"
+              data-saved="{% translate 'Shared draft saved' %}"
+              data-failed="{% translate 'The request failed. Check your connection and try again.' %}"
+              data-baseline="{% translate 'Existing rule violations' %}"
+              data-underfilled="{% translate 'Underfilled shifts' %}">
+            {% csrf_token %}
+            <div class="planning-toolbar">
+                <button type="button"
+                        class="btn btn-secondary"
+                        id="validate-draft">{% translate "Check rules" %}</button>
+                <button type="submit"
+                        class="btn btn-primary"
+                        id="save-draft"
+                        disabled>{% translate "Save shared draft" %}</button>
+                <a href="{% url 'ephios_shift_coordination:plan' period.pk %}">{% translate "Reload saved draft" %}</a>
+                <span id="draft-status" role="status" aria-live="polite"></span>
+            </div>
+            <div id="invalid-assignments"></div>
+            <div class="planning-layout">
+                <section aria-label="{% translate 'Service calendar' %}">
+                    <label for="planning-month">{% translate "Month" %}</label>
+                    <select id="planning-month"></select>
+                    <div id="service-calendar" class="service-calendar"></div>
+                </section>
+                <aside aria-label="{% translate 'People and responses' %}">
+                    <h2>{% translate "People and responses" %}</h2>
+                    <div id="planning-people"></div>
+                </aside>
+            </div>
+            <section aria-label="{% translate 'Rule checks' %}" id="planning-validation">
+            </section>
+        </form>
+        <noscript>{% translate "Enable JavaScript to edit the planning draft." %}</noscript>
+        {{ planning_data|json_script:"planning-data" }}
+        <script type="module"
+                src="{% static 'ephios_shift_coordination/planning.js' %}"></script>
+        <details>
+            <summary>{% translate "Recorded exceptions" %}</summary>
+            {% for record in history %}
+                <p><strong>{{ record.rule_label }}</strong> · {{ record.people_label }} · {{ record.shifts_label }}</p>
+                <p>{% translate "Version" %} {{ record.draft_version }} · {{ record.actor|default:"—" }} · {{ record.created_at }}</p>
+                <p>{{ record.reason|linebreaksbr }}</p>
+            {% empty %}
+                <p>{% translate "No recorded exceptions." %}</p>
+            {% endfor %}
+        </details>
+    {% endif %}
+{% endblock %}

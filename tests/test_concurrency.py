@@ -147,3 +147,42 @@ def test_response_waiting_for_period_lock_rechecks_deadline(planning_data, monke
             clock[0] = period.deadline
         future.result(timeout=10)
     assert not response.availabilities.exists()
+
+
+def test_parallel_draft_saves_have_exactly_one_winner(planning_data, monkeypatch):
+    from ephios_shift_coordination.drafts import load_plan, save_draft
+    from ephios_shift_coordination.models import DraftAssignment
+    from ephios_shift_coordination.services import Conflict
+    from ephios_shift_coordination.surveys import open_survey, save_response
+    from tests.test_surveys import answer
+
+    data = planning_data
+    period = survey_fixture(data)
+    period = open_survey(data.coordinator, period.pk, expected_version=1)
+    response = period.responses.get(user=data.member)
+    save_response(data.member, period.pk, **{**answer(response), "maximum": 2})
+    monkeypatch.setattr("django.utils.timezone.now", lambda: period.deadline)
+    plan = load_plan(data.coordinator, period.pk)
+    shifts = list(response.offered_shifts.values_list("pk", flat=True))
+
+    def submit(shift_id):
+        try:
+            save_draft(
+                data.coordinator,
+                period.pk,
+                expected_version=plan["version"],
+                fingerprint=plan["fingerprint"],
+                assignments=[[data.member.pk, shift_id]],
+                confirmations=[],
+            )
+            return "saved"
+        except Conflict:
+            return "conflict"
+
+    assert sorted(parallel_calls(lambda: submit(shifts[0]), lambda: submit(shifts[1]))) == [
+        "conflict",
+        "saved",
+    ]
+    assert DraftAssignment.objects.filter(period=period).count() == 1
+    period.refresh_from_db()
+    assert period.version == plan["version"] + 1

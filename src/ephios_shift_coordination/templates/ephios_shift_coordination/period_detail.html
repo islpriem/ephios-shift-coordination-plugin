@@ -4,6 +4,10 @@
 {% block content %}
     <h1>{{ period.template_snapshot.title }}</h1>
     <p>{{ period.start_date }} – {{ period.end_date }} · {{ period.effective_state_label }}</p>
+    {% if period.effective_state == "planning" %}
+        <p><a class="btn btn-primary"
+   href="{% url 'ephios_shift_coordination:plan' period.pk %}">{% translate "Plan services" %}</a></p>
+    {% endif %}
     {% if not period.opened_at %}
         <p>{% translate "The events are visible. No survey has been opened." %}</p>
         <form method="post"

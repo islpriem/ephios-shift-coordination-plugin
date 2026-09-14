@@ -384,3 +384,147 @@ msgstr "Rückmeldungen"
 
 msgid "No eligible recipients were found."
 msgstr "Es wurden keine passenden Empfänger gefunden."
+
+msgid "No complete response for this shift"
+msgstr "Keine vollständige Rückmeldung für diese Schicht"
+
+msgid "Marked unavailable"
+msgstr "Als nicht verfügbar markiert"
+
+msgid "Required qualification missing or expired"
+msgstr "Erforderliche Qualifikation fehlt oder ist abgelaufen"
+
+msgid "Personal maximum exceeded"
+msgstr "Persönliche Höchstzahl überschritten"
+
+msgid "Weekly limit exceeded"
+msgstr "Wöchentliche Höchstzahl überschritten"
+
+msgid "Services on consecutive days"
+msgstr "Dienste an aufeinanderfolgenden Tagen"
+
+msgid "Overlapping services of the same event type"
+msgstr "Überschneidende Dienste desselben Veranstaltungstyps"
+
+msgid "Shift maximum exceeded"
+msgstr "Höchstbesetzung der Schicht überschritten"
+
+msgid "Planning is available only after the response deadline and before publication."
+msgstr "Planung ist nur nach Ablauf der Rückmeldefrist und vor der Veröffentlichung möglich."
+
+msgid "The draft or its inputs have changed. Reload before continuing."
+msgstr "Der Entwurf oder seine Eingangsdaten wurden geändert. Neu laden, bevor du fortfährst."
+
+msgid "Invalid assignment selection."
+msgstr "Ungültige Auswahl von Zuteilungen."
+
+msgid "A selected person or shift is unavailable or lacks event access. Remove that assignment."
+msgstr "Eine ausgewählte Person oder Schicht ist nicht verfügbar oder der Veranstaltungszugriff fehlt. Entferne diese Zuteilung."
+
+msgid "Explicitly confirm every exception and provide a reason of at most 2000 characters."
+msgstr "Bestätige jede Ausnahme ausdrücklich und gib eine Begründung mit höchstens 2000 Zeichen an."
+
+msgid "Confirm every current rule violation with a reason before saving."
+msgstr "Bestätige vor dem Speichern jeden aktuellen Regelverstoß mit einer Begründung."
+
+msgid "Invalid draft request."
+msgstr "Ungültige Entwurfsanfrage."
+
+msgid "Plan services"
+msgstr "Dienste planen"
+
+msgid "Responses and events"
+msgstr "Rückmeldungen und Veranstaltungen"
+
+msgid "Changes remain local until you save the shared draft. Saving creates no participations or emails."
+msgstr "Änderungen bleiben lokal, bis du den gemeinsamen Entwurf speicherst. Beim Speichern entstehen keine Teilnahmen oder E-Mails."
+
+msgid "Selected"
+msgstr "Ausgewählt"
+
+msgid "Minimum"
+msgstr "Minimum"
+
+msgid "Maximum"
+msgstr "Maximum"
+
+msgid "Free places"
+msgstr "Freie Plätze"
+
+msgid "Existing"
+msgstr "Bestehend"
+
+msgid "Draft"
+msgstr "Entwurf"
+
+msgid "Total"
+msgstr "Gesamt"
+
+msgid "Qualification missing"
+msgstr "Qualifikation fehlt"
+
+msgid "Add a person for a manual exception"
+msgstr "Person für eine manuelle Ausnahme hinzufügen"
+
+msgid "Add person"
+msgstr "Person hinzufügen"
+
+msgid "Remove invalid assignment"
+msgstr "Ungültige Zuteilung entfernen"
+
+msgid "I confirm this exception"
+msgstr "Ich bestätige diese Ausnahme"
+
+msgid "Reason for this exception"
+msgstr "Begründung für diese Ausnahme"
+
+msgid "Unsaved changes"
+msgstr "Ungespeicherte Änderungen"
+
+msgid "Checking current rules…"
+msgstr "Aktuelle Regeln werden geprüft…"
+
+msgid "Rules checked. Confirm any exceptions before saving."
+msgstr "Regeln geprüft. Bestätige alle Ausnahmen vor dem Speichern."
+
+msgid "Shared draft saved"
+msgstr "Gemeinsamer Entwurf gespeichert"
+
+msgid "The request failed. Check your connection and try again."
+msgstr "Die Anfrage ist fehlgeschlagen. Prüfe deine Verbindung und versuche es erneut."
+
+msgid "Existing rule violations"
+msgstr "Bestehende Regelverstöße"
+
+msgid "Underfilled shifts"
+msgstr "Unterbesetzte Schichten"
+
+msgid "Check rules"
+msgstr "Regeln prüfen"
+
+msgid "Save shared draft"
+msgstr "Gemeinsamen Entwurf speichern"
+
+msgid "Reload saved draft"
+msgstr "Gespeicherten Entwurf neu laden"
+
+msgid "Service calendar"
+msgstr "Dienstkalender"
+
+msgid "Month"
+msgstr "Monat"
+
+msgid "People and responses"
+msgstr "Personen und Rückmeldungen"
+
+msgid "Rule checks"
+msgstr "Regelprüfung"
+
+msgid "Enable JavaScript to edit the planning draft."
+msgstr "Aktiviere JavaScript, um den Planungsentwurf zu bearbeiten."
+
+msgid "Recorded exceptions"
+msgstr "Dokumentierte Ausnahmen"
+
+msgid "No recorded exceptions."
+msgstr "Keine dokumentierten Ausnahmen."

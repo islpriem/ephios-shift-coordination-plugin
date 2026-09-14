@@ -3,8 +3,8 @@
 An ephios plugin for availability surveys and recurring service planning.
 
 The plugin targets ephios 0.27.0 and Python 3.14. Planning permissions, settings,
-service templates, recurring event creation and availability surveys are implemented.
-Assignment planning and publication are still in development.
+service templates, recurring event creation, availability surveys and shared planning
+drafts are implemented. Automatic proposals and publication are still in development.
 It is based on the [official plugin template](https://github.com/ephios-dev/ephios-plugin-template).
 
 ## Development
@@ -27,11 +27,12 @@ make build       # Wheel, source archive and selected container build inputs
 
 `make check` is also the pre-commit and CI command. It includes template linting,
 PostgreSQL concurrency tests and browser tests for setup, template editing, date
-selection, event creation, private surveys, deadlines and captured reminder mail. Installation and activation are
+selection, event creation, private surveys, deadlines, shared drafts, recorded exceptions
+and captured reminder mail. Installation and activation are
 checked again after a normal container restart. The test stack is stopped
 afterwards; its local data is retained. Reports are under `.local/test-results/`.
 Template rendering coverage is reported separately at file level; it does not
-measure template branches. Assignment planning and publication acceptance is still pending.
+measure template branches. Automatic proposals and publication acceptance is still pending.
 
 ## Local stack
 
@@ -105,6 +106,19 @@ Invitations and reminders use ephios notification preferences and its normal
 do not create duplicate dispatches. After an outage, only the newest due reminder
 is created. The server locks answers at the deadline even if the periodic command
 has not yet run. Opening a survey does not create shift participations.
+
+After the deadline, coordinators use **Dienste planen** to select people in the monthly
+calendar. Counts update immediately; the server checks the current qualifications,
+responses, personal and weekly limits, consecutive days, overlaps and shift capacity.
+Only confirmed services of the same event type affect these checks. Notes are visible
+to coordinators and are never passed to the independent scheduling module.
+
+Use **Person hinzufügen** for an explicit manual exception. Every current rule violation
+requires its own confirmation and reason before **Gemeinsamen Entwurf speichern**.
+Saving replaces the shared draft and records the exceptions without changing responses,
+creating native participations or sending email. Other coordinators see it after loading.
+Stale versions or changed native inputs require reloading; deleted or inaccessible targets
+cannot be overridden. Recorded reasons remain available after subsequent draft edits.
 
 The demo loader runs only in the development configuration with the internal
 mail catcher. It is excluded from the plugin distribution and image build inputs.

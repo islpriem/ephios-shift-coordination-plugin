@@ -1,8 +1,10 @@
+import json
 from datetime import timedelta
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -10,6 +12,7 @@ from django.views.decorators.http import require_http_methods
 
 from .access import require_access
 from .dates import calendar_days
+from .drafts import RULE_LABELS, load_plan, save_draft, validate_draft
 from .ephios_integration import eligible
 from .forms import (
     PeriodForm,
@@ -22,6 +25,64 @@ from .forms import (
 from .models import PlanningPeriod, PlanningSettings, ServiceTemplate, SurveyResponse
 from .services import Conflict, create_period, preview_template
 from .surveys import open_survey, save_response
+
+
+@require_access()
+@require_http_methods(["GET"])
+def plan(request, pk):
+    period = get_object_or_404(PlanningPeriod, pk=pk)
+    context = {"period": period}
+    status = 200
+    try:
+        context["planning_data"] = load_plan(request.user, pk)
+        history = list(period.rule_overrides.select_related("actor"))
+        people = {p["id"]: p["name"] for p in context["planning_data"]["people"]}
+        shifts = {s["id"]: s for s in context["planning_data"]["shifts"]}
+        for record in history:
+            record.rule_label = RULE_LABELS[record.code]
+            record.people_label = ", ".join(
+                people.get(pk, str(pk)) for pk in record.facts["person_ids"]
+            )
+            record.shifts_label = ", ".join(
+                f"{shifts[pk]['date']} {shifts[pk]['label']}"
+                for pk in record.facts["shift_ids"]
+                if pk in shifts
+            )
+        context["history"] = history
+    except Conflict as exc:
+        context["error"] = str(exc)
+        status = 409
+    return render(request, "ephios_shift_coordination/plan.html", context, status=status)
+
+
+def draft_request(request, pk, *, save=False):
+    try:
+        payload = json.loads(request.body)
+        expected = {"expected_version", "fingerprint", "assignments"}
+        if save:
+            expected.add("confirmations")
+        if not isinstance(payload, dict) or set(payload) != expected:
+            raise ValidationError(_("Invalid draft request."))
+        result = (save_draft if save else validate_draft)(request.user, pk, **payload)
+        return JsonResponse(result)
+    except json.JSONDecodeError, UnicodeDecodeError:
+        return JsonResponse({"error": _("Invalid draft request.")}, status=400)
+    except ValidationError as exc:
+        return JsonResponse({"error": " ".join(exc.messages)}, status=400)
+    except Conflict as exc:
+        return JsonResponse({"error": str(exc)}, status=409)
+
+
+@require_access()
+@require_http_methods(["POST"])
+def draft_validate(request, pk):
+    return draft_request(request, pk)
+
+
+@require_access()
+@require_http_methods(["POST"])
+def draft_save(request, pk):
+    return draft_request(request, pk, save=True)
 
 
 @require_access("admin")
