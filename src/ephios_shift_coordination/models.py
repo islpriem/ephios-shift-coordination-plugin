@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from .dates import holiday_calendar
@@ -153,6 +154,9 @@ class PlanningPeriod(models.Model):
     template_snapshot = models.JSONField()
     state = models.CharField(max_length=16, choices=State.choices, default=State.PREPARATION)
     version = models.PositiveIntegerField(default=1)
+    opened_at = models.DateTimeField(null=True)
+    deadline = models.DateTimeField(null=True)
+    opened_structure = models.JSONField(default=dict)
     creation_key = models.UUIDField(default=uuid.uuid4, unique=True)
     request_digest = models.CharField(max_length=64)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, models.SET_NULL, null=True)
@@ -167,6 +171,16 @@ class PlanningPeriod(models.Model):
             )
         ]
         ordering = ["-start_date", "-pk"]
+
+    @property
+    def effective_state(self):
+        if self.state == self.State.SURVEY_OPEN and self.deadline <= timezone.now():
+            return self.State.PLANNING
+        return self.state
+
+    @property
+    def effective_state_label(self):
+        return self.State(self.effective_state).label
 
     def get_absolute_url(self):
         return reverse("ephios_shift_coordination:period_detail", args=[self.pk])
@@ -192,3 +206,63 @@ class PlannedShift(models.Model):
     shift = models.OneToOneField("core.Shift", models.SET_NULL, null=True)
     original_shift_id = models.PositiveIntegerField()
     snapshot = models.JSONField()
+
+
+class SurveyResponse(models.Model):
+    period = models.ForeignKey(PlanningPeriod, models.CASCADE, related_name="responses")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, models.CASCADE)
+    offered_shifts = models.ManyToManyField(PlannedShift)
+    maximum = models.PositiveIntegerField(_("Personal maximum"), null=True)
+    notes = models.TextField(_("Notes"), max_length=4000, blank=True)
+    submitted_at = models.DateTimeField(null=True)
+    updated_at = models.DateTimeField(null=True)
+    version = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["period", "user"], name="planning_unique_response")
+        ]
+
+    def get_absolute_url(self):
+        return reverse("ephios_shift_coordination:survey_detail", args=[self.period_id])
+
+
+class Availability(models.Model):
+    class Rating(models.TextChoices):
+        UNAVAILABLE = "unavailable", _("Unavailable (red)")
+        IF_NEEDED = "if_needed", _("If needed (yellow)")
+        AVAILABLE = "available", _("Available (green)")
+        PREFERRED = "preferred", _("Especially preferred (star)")
+
+    response = models.ForeignKey(SurveyResponse, models.CASCADE, related_name="availabilities")
+    planned_shift = models.ForeignKey(PlannedShift, models.CASCADE)
+    rating = models.CharField(max_length=16, choices=Rating.choices)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["response", "planned_shift"], name="planning_unique_availability"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    rating__in=["unavailable", "if_needed", "available", "preferred"]
+                ),
+                name="planning_valid_rating",
+            ),
+        ]
+
+
+class NotificationDispatch(models.Model):
+    period = models.ForeignKey(PlanningPeriod, models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, models.CASCADE)
+    kind = models.CharField(max_length=16)
+    key = models.CharField(max_length=64)
+    notification = models.OneToOneField("core.Notification", models.SET_NULL, null=True)
+    skipped = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["period", "user", "kind", "key"], name="planning_unique_dispatch"
+            )
+        ]

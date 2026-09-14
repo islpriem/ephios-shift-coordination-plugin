@@ -3,8 +3,46 @@
 {% block title %}{{ period.template_snapshot.title }}{% endblock %}
 {% block content %}
     <h1>{{ period.template_snapshot.title }}</h1>
-    <p>{{ period.start_date }} – {{ period.end_date }} · {{ period.get_state_display }}</p>
-    <p>{% translate "The events are visible. No survey has been opened." %}</p>
+    <p>{{ period.start_date }} – {{ period.end_date }} · {{ period.effective_state_label }}</p>
+    {% if not period.opened_at %}
+        <p>{% translate "The events are visible. No survey has been opened." %}</p>
+        <form method="post"
+              action="{% url 'ephios_shift_coordination:survey_open' period.pk %}">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <button type="submit"
+                    name="action"
+                    value="save_settings"
+                    class="btn btn-secondary">{% translate "Save survey settings" %}</button>
+            <button type="submit"
+                    name="action"
+                    value="open"
+                    class="btn btn-primary">{% translate "Open survey and invite members" %}</button>
+        </form>
+    {% else %}
+        <p>{% translate "Response deadline" %}: {{ period.deadline }}</p>
+        {{ form.non_field_errors }}
+        <h2>{% translate "Responses" %}</h2>
+        {% for response in responses %}
+            <details>
+                <summary>{{ response.user }} · {% if response.submitted_at %}{% translate "Response saved" %}{% else %}{% translate "Awaiting response" %}{% endif %}</summary>
+                {% for label in response.eligibility_warnings %}
+                    <p>{{ label }}: {% translate "Currently no longer eligible for this shift." %}</p>
+                {% endfor %}
+                {% if response.submitted_at %}
+                    <p>{% translate "Personal maximum" %}: {{ response.maximum }} · {% translate "Version" %} {{ response.version }} · {{ response.updated_at }}</p>
+                    <p>{{ response.notes|linebreaksbr }}</p>
+                    <ul>
+                        {% for availability in response.availabilities.all %}
+                            <li>{{ availability.planned_shift.snapshot.start_time }} · {{ availability.planned_shift.snapshot.label }}: {{ availability.get_rating_display }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            </details>
+        {% empty %}
+            <p>{% translate "No eligible recipients were found." %}</p>
+        {% endfor %}
+    {% endif %}
     <ul>
         {% for item in events %}
             <li>

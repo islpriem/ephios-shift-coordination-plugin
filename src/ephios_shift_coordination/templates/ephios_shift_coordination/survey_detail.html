@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% load i18n static %}
+{% block title %}
+    {% translate "Your availability" %}
+{% endblock %}
+{% block content %}
+    <link rel="stylesheet"
+          href="{% static 'ephios_shift_coordination/planning.css' %}">
+    <h1>{% translate "Your availability" %}</h1>
+    <p>{{ response.period.start_date }} – {{ response.period.end_date }} · {{ response.period.effective_state_label }}</p>
+    <p>{% translate "Response deadline" %}: {{ response.period.deadline }}</p>
+    <p>{% translate "Preferences are not assignments. Only you and authorized coordinators can read your response." %}</p>
+    {% if response.submitted_at %}
+        <p>{% translate "Response saved" %} · {{ response.updated_at }} · {% translate "Version" %} {{ response.version }}</p>
+    {% else %}
+        <p>{% translate "No complete response submitted yet." %}</p>
+    {% endif %}
+    {% if not writable %}
+        <p>{% translate "Your response is read-only." %}</p>
+    {% endif %}
+    <form method="post" class="survey-response">
+        {% csrf_token %}
+        {{ form.as_p }}
+        {% if writable %}
+            <button class="btn btn-primary"
+                    type="submit">{% translate "Save complete response" %}</button>
+        {% endif %}
+    </form>
+    <p><a href="{% url 'ephios_shift_coordination:survey_list' %}">{% translate "All your surveys" %}</a></p>
+{% endblock %}

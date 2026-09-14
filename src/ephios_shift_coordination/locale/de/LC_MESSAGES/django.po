@@ -279,3 +279,108 @@ msgstr "Jede Schicht muss zu dieser Vorlage gehören und darf nur einmal vorkomm
 
 msgid "All shifts in a new period must start in the future."
 msgstr "Alle Schichten eines neuen Intervalls müssen in der Zukunft beginnen."
+
+msgid "Personal maximum"
+msgstr "Persönliche Höchstzahl"
+
+msgid "Notes"
+msgstr "Anmerkungen"
+
+msgid "Unavailable (red)"
+msgstr "Nicht verfügbar (rot)"
+
+msgid "If needed (yellow)"
+msgstr "Falls nötig (gelb)"
+
+msgid "Available (green)"
+msgstr "Verfügbar (grün)"
+
+msgid "Especially preferred (star)"
+msgstr "Besonders erwünscht (Stern)"
+
+msgid "The original event was deleted or changed. Check the native events."
+msgstr "Die ursprüngliche Veranstaltung wurde gelöscht oder geändert. Bitte die Veranstaltungen in ephios prüfen."
+
+msgid "The event's shifts have changed. Check the native events."
+msgstr "Die Schichten der Veranstaltung wurden geändert. Bitte die Veranstaltungen in ephios prüfen."
+
+msgid "A shift was changed or already has participations. Check the native events."
+msgstr "Eine Schicht wurde geändert oder enthält bereits Teilnahmen. Bitte die Veranstaltungen in ephios prüfen."
+
+msgid "Event type qualifications have changed since the survey opened."
+msgstr "Die Qualifikationsanforderungen des Veranstaltungstyps wurden seit Öffnung der Umfrage geändert."
+
+msgid "This period has changed. Reload before continuing."
+msgstr "Dieses Intervall wurde geändert. Bitte vor dem Fortfahren neu laden."
+
+msgid "The deadline must be in the future and before the first shift."
+msgstr "Die Frist muss in der Zukunft und vor Beginn der ersten Schicht liegen."
+
+msgid "The response deadline has passed. Your response is read-only."
+msgstr "Die Rückmeldefrist ist abgelaufen. Deine Antwort ist nur noch lesbar."
+
+msgid "Your response has changed. Reload before saving again."
+msgstr "Deine Antwort wurde geändert. Bitte vor dem erneuten Speichern neu laden."
+
+msgid "Provide a non-negative maximum and a rating for every offered shift."
+msgstr "Bitte eine Höchstzahl ab null und eine Bewertung für jede angebotene Schicht angeben."
+
+msgid "Invitation to an availability survey"
+msgstr "Einladung zur Verfügbarkeitsumfrage"
+
+msgid "Please submit your availability by {deadline}. Preferences are not assignments."
+msgstr "Bitte gib deine Verfügbarkeit bis {deadline} an. Wünsche sind keine Zusagen."
+
+msgid "Open your survey"
+msgstr "Deine Umfrage öffnen"
+
+msgid "Reminder: your availability survey is still unanswered"
+msgstr "Erinnerung: Deine Verfügbarkeitsumfrage ist noch unbeantwortet"
+
+msgid "Response deadline"
+msgstr "Rückmeldefrist"
+
+msgid "Currently no longer eligible for this shift."
+msgstr "Aktuell für diese Schicht nicht mehr berechtigt oder qualifiziert."
+
+msgid "Rate exactly the originally offered shifts."
+msgstr "Bitte genau die ursprünglich angebotenen Schichten bewerten."
+
+msgid "Your availability"
+msgstr "Deine Verfügbarkeit"
+
+msgid "Preferences are not assignments. Only you and authorized coordinators can read your response."
+msgstr "Wünsche sind keine Zusagen. Nur du und berechtigte Koordinierende können deine Antwort lesen."
+
+msgid "Response saved"
+msgstr "Antwort gespeichert"
+
+msgid "Version"
+msgstr "Version"
+
+msgid "No complete response submitted yet."
+msgstr "Noch keine vollständige Antwort abgegeben."
+
+msgid "Your response is read-only."
+msgstr "Deine Antwort ist nur noch lesbar."
+
+msgid "Save complete response"
+msgstr "Vollständige Antwort speichern"
+
+msgid "All your surveys"
+msgstr "Alle deine Umfragen"
+
+msgid "Awaiting response"
+msgstr "Antwort ausstehend"
+
+msgid "Save survey settings"
+msgstr "Umfrageeinstellungen speichern"
+
+msgid "Open survey and invite members"
+msgstr "Umfrage öffnen und Mitglieder einladen"
+
+msgid "Responses"
+msgstr "Rückmeldungen"
+
+msgid "No eligible recipients were found."
+msgstr "Es wurden keine passenden Empfänger gefunden."

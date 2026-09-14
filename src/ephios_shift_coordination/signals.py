@@ -6,14 +6,16 @@ from ephios.core.signals import (
     HTML_EVENT_INFO,
     insert_html,
     nav_link,
+    periodic_signal,
     register_group_permission_fields,
+    register_notification_types,
     settings_sections,
 )
 from ephios.core.views.settings import SETTINGS_MANAGEMENT_SECTION_KEY
 from ephios.extra.permissions import PermissionField
 
 from .access import PERMISSION, can_plan
-from .models import PlannedEvent
+from .models import PlannedEvent, SurveyResponse
 
 
 @receiver(nav_link, dispatch_uid="shift_coordination.navigation")
@@ -82,5 +84,29 @@ def event_info(sender, request, event, **kwargs):
         return ""
     return render_to_string(
         "ephios_shift_coordination/event_info.html",
-        {"period": link.period, "can_plan": can_plan(request.user)},
+        {
+            "period": link.period,
+            "can_plan": can_plan(request.user),
+            "response": SurveyResponse.objects.filter(
+                period=link.period, user=request.user
+            ).first(),
+        },
     )
+
+
+@receiver(register_notification_types, dispatch_uid="shift_coordination.notifications")
+def notification_types(sender, **kwargs):
+    from .notifications import SurveyInvitation, SurveyReminder
+
+    return [SurveyInvitation, SurveyReminder]
+
+
+@receiver(periodic_signal, dispatch_uid="shift_coordination.survey_periodic")
+def survey_periodic(sender, **kwargs):
+    from django.db import transaction
+    from ephios.core.services.notifications.backends import send_all_notifications
+
+    from .surveys import process_surveys
+
+    process_surveys()
+    transaction.on_commit(send_all_notifications)

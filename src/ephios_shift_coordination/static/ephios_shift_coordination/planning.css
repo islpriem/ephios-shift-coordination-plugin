@@ -18,3 +18,19 @@
 .planning-column-5 { grid-column: 5; }
 .planning-column-6 { grid-column: 6; }
 .planning-column-7 { grid-column: 7; }
+
+.survey-response textarea { width: 100%; max-width: 42rem; }
+.survey-response label:has(input[type="radio"]) {
+    display: block;
+    max-width: 42rem;
+    padding: 0.45rem 0.6rem;
+    margin-block: 0.25rem;
+    border-inline-start: 4px solid;
+    border-radius: 0.2rem;
+    color: #162c22;
+}
+.survey-response label:has(input[value="unavailable"]) { border-color: #a32432; background: #fde9eb; }
+.survey-response label:has(input[value="if_needed"]) { border-color: #856300; background: #fff2cb; }
+.survey-response label:has(input[value="available"]) { border-color: #287449; background: #e3f0e8; }
+.survey-response label:has(input[value="preferred"]) { border-color: #18583a; background: #c8e6d5; }
+.survey-response label:has(input:focus-visible) { outline: 2px solid #005a82; outline-offset: 2px; }

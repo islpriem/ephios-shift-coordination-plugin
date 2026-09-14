@@ -1,5 +1,6 @@
 import uuid
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import holidays
 from django import forms
@@ -7,6 +8,7 @@ from django.contrib.auth.models import Group, Permission
 from django.db import transaction
 from django.forms import BaseInlineFormSet, inlineformset_factory
 from django.utils import timezone
+from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _
 
 from .dates import next_month
@@ -198,3 +200,72 @@ class PeriodForm(RuleForm):
         ):
             raise forms.ValidationError(_("Select distinct dates within the period."))
         return dates
+
+
+class SurveyOpeningForm(forms.Form):
+    expected_version = forms.IntegerField(widget=forms.HiddenInput, min_value=1)
+    deadline = forms.DateTimeField(
+        label=_("Response deadline"),
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"),
+    )
+    reminder_days = forms.CharField(
+        label=_("Reminder days before deadline"),
+        required=False,
+        help_text=_("Comma-separated positive day offsets; leave empty for no reminders."),
+    )
+    clean_reminder_days = RuleForm.clean_reminder_days
+
+
+class SurveyResponseForm(forms.Form):
+    expected_version = forms.IntegerField(widget=forms.HiddenInput, min_value=0)
+    maximum = forms.IntegerField(label=_("Personal maximum"), min_value=0, max_value=2147483647)
+    notes = forms.CharField(
+        label=_("Notes"), required=False, max_length=4000, widget=forms.Textarea
+    )
+
+    def __init__(self, *args, response, **kwargs):
+        from .ephios_integration import eligible
+        from .models import Availability
+
+        super().__init__(*args, **kwargs)
+        self.response = response
+        self.initial.update(
+            expected_version=response.version, maximum=response.maximum, notes=response.notes
+        )
+        ratings = dict(response.availabilities.values_list("planned_shift_id", "rating"))
+        self.offered = sorted(
+            response.offered_shifts.select_related("shift__event__type", "event"),
+            key=lambda shift: (datetime.fromisoformat(shift.snapshot["start_time"]), shift.pk),
+        )
+        for shift in self.offered:
+            name = f"rating_{shift.pk}"
+            start = datetime.fromisoformat(shift.snapshot["start_time"]).astimezone(
+                ZoneInfo(response.period.timezone)
+            )
+            end = datetime.fromisoformat(shift.snapshot["end_time"]).astimezone(
+                ZoneInfo(response.period.timezone)
+            )
+            label = (
+                f"{date_format(start, 'DATETIME_FORMAT')} – {date_format(end, 'TIME_FORMAT')}"
+                f" · {shift.snapshot['label']}"
+            )
+            self.fields[name] = forms.ChoiceField(
+                label=label,
+                choices=Availability.Rating.choices,
+                widget=forms.RadioSelect,
+                help_text=_("Currently no longer eligible for this shift.")
+                if not eligible(response.user, shift)
+                else "",
+            )
+            self.initial[name] = ratings.get(shift.pk)
+
+    def clean(self):
+        cleaned = super().clean()
+        supplied = {key for key in self.data if key.startswith("rating_")}
+        expected = {f"rating_{shift.pk}" for shift in self.offered}
+        if supplied != expected or any(len(self.data.getlist(key)) != 1 for key in supplied):
+            raise forms.ValidationError(_("Rate exactly the originally offered shifts."))
+        return cleaned
+
+    def ratings(self):
+        return {shift.pk: self.cleaned_data[f"rating_{shift.pk}"] for shift in self.offered}

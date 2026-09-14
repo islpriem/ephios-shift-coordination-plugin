@@ -5,5 +5,19 @@
 {% endblock %}
 {% block content %}
     <h1>{% translate "Surveys" %}</h1>
-    <p>{% translate "There are no surveys available yet." %}</p>
+    <ul>
+        {% for response in responses %}
+            <li>
+                <a href="{{ response.get_absolute_url }}">{{ response.period.start_date }} – {{ response.period.end_date }}</a>
+                · {{ response.period.effective_state_label }} ·
+                {% if response.submitted_at %}
+                    {% translate "Response saved" %}
+                {% else %}
+                    {% translate "Awaiting response" %}
+                {% endif %}
+            </li>
+        {% empty %}
+            <li>{% translate "There are no surveys available yet." %}</li>
+        {% endfor %}
+    </ul>
 {% endblock %}

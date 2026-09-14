@@ -3,8 +3,8 @@
 An ephios plugin for availability surveys and recurring service planning.
 
 The plugin targets ephios 0.27.0 and Python 3.14. Planning permissions, settings,
-service templates and recurring event creation are implemented. Surveys and
-assignment planning are still in development.
+service templates, recurring event creation and availability surveys are implemented.
+Assignment planning and publication are still in development.
 It is based on the [official plugin template](https://github.com/ephios-dev/ephios-plugin-template).
 
 ## Development
@@ -27,11 +27,11 @@ make build       # Wheel, source archive and selected container build inputs
 
 `make check` is also the pre-commit and CI command. It includes template linting,
 PostgreSQL concurrency tests and browser tests for setup, template editing, date
-selection, event creation and member access. Installation and activation are
+selection, event creation, private surveys, deadlines and captured reminder mail. Installation and activation are
 checked again after a normal container restart. The test stack is stopped
 afterwards; its local data is retained. Reports are under `.local/test-results/`.
 Template rendering coverage is reported separately at file level; it does not
-measure template branches. Full survey and assignment acceptance is still pending.
+measure template branches. Assignment planning and publication acceptance is still pending.
 
 ## Local stack
 
@@ -91,6 +91,20 @@ to select a template and period, calculate the initial dates, adjust individual
 days, inspect the preview and create native events. Events are immediately
 visible according to their permissions and self-signup is disabled. The creator
 is also made responsible, in addition to the template's configured responsibles.
+
+On the period page, save the response deadline and reminder offsets, then open the
+survey to invite eligible members. The deadline must precede the first shift.
+Members use **Umfragen** to rate every offered shift, set a personal maximum
+(including zero), and optionally add private notes. They can replace the complete
+response until the deadline; afterwards their response remains readable.
+Coordinators can inspect responses on the period page. Qualification changes are
+shown without changing the original questions or saved ratings.
+
+Invitations and reminders use ephios notification preferences and its normal
+`run_periodic` command. Only unanswered surveys receive reminders; repeated runs
+do not create duplicate dispatches. After an outage, only the newest due reminder
+is created. The server locks answers at the deadline even if the periodic command
+has not yet run. Opening a survey does not create shift participations.
 
 The demo loader runs only in the development configuration with the internal
 mail catcher. It is excluded from the plugin distribution and image build inputs.

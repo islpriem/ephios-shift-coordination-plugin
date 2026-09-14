@@ -3,3 +3,6 @@
     {% if can_plan %}<a href="{{ period.get_absolute_url }}">{{ period.start_date }} – {{ period.end_date }}</a>
 {% else %}{{ period.start_date }} – {{ period.end_date }}{% endif %}
 </p>
+{% if response %}
+    <p><a href="{{ response.get_absolute_url }}">{% translate "Open your survey" %}</a></p>
+{% endif %}

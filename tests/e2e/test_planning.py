@@ -24,7 +24,7 @@ def test_demo_coordinator_creates_service_series_and_member_sees_event():
     base = f"http://127.0.0.1:{os.environ.get('EPHIOS_HTTP_PORT', '8099')}"
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
-        coordinator = browser.new_page(locale="de-DE")
+        coordinator = browser.new_page(service_workers="block", locale="de-DE")
         member = None
         try:
             login(coordinator, "demo-001@example.invalid", "demo-only-member-password")
@@ -49,7 +49,9 @@ def test_demo_coordinator_creates_service_series_and_member_sees_event():
             event.click()
             expect(coordinator.get_by_text("Schicht 1", exact=True)).to_be_visible()
             expect(coordinator.get_by_text("Schicht 2", exact=True)).to_be_visible()
-            member = browser.new_page(locale="de-DE", viewport={"width": 390, "height": 844})
+            member = browser.new_page(
+                service_workers="block", locale="de-DE", viewport={"width": 390, "height": 844}
+            )
             login(member, "demo-003@example.invalid", "demo-only-member-password")
             member.locator(".navbar-toggler").click()
             expect(member.get_by_role("link", name="Dienstplanung", exact=True)).to_have_count(0)
@@ -72,7 +74,7 @@ def test_admin_can_edit_demo_template_and_add_a_shift():
     base = f"http://127.0.0.1:{os.environ.get('EPHIOS_HTTP_PORT', '8099')}"
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
-        page = browser.new_page(locale="de-DE")
+        page = browser.new_page(service_workers="block", locale="de-DE")
         try:
             login(page, "admin-de@example.invalid", "isolated-browser-test-password")
             page.goto(base + "/shift-coordination/templates/")
