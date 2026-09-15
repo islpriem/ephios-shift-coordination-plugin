@@ -65,7 +65,7 @@ def test_methods_csrf_bad_json_conflicts_and_missing_period(client, draft_data):
     assert client.get(reverse("ephios_shift_coordination:plan", args=[99999])).status_code == 404
     data.period.state = data.period.State.PUBLISHED
     data.period.save()
-    assert client.get(url(data)).status_code == 409
+    assert client.get(url(data)).status_code == 302
 
 
 @pytest.mark.parametrize("action", ["draft_validate", "draft_save"])

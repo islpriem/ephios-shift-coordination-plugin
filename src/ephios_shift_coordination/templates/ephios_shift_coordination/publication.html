@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% load i18n tz %}
+{% block title %}
+    {% translate "Publication" %}
+{% endblock %}
+{% block content %}
+    {% timezone period.timezone %}
+        <h1>
+            {% if period.state == "published" %}
+                {% translate "Published plan" %}
+            {% else %}
+                {% translate "Review saved draft for publication" %}
+            {% endif %}
+        </h1>
+        <p>{{ period.template_snapshot.title }} · {{ period.start_date }} – {{ period.end_date }}</p>
+        {% if error %}<p class="alert alert-warning" role="alert">{{ error }}</p>{% endif %}
+        {% if period.state == "published" %}
+            <p>{% translate "Published by" %}: {{ period.published_by|default:"—" }} · {{ period.published_at }} · {% translate "Version" %} {{ period.version }}</p>
+            <p>{% translate "This record preserves the published plan. Make later assignment changes in ephios." %}</p>
+            {% if changed %}
+                <p class="alert alert-warning"
+                   role="status">{% translate "Current ephios data differs from this published record." %}</p>
+            {% endif %}
+        {% elif form %}
+            <p>{% translate "Only the saved shared draft shown here will be published. Unsaved calendar selections are not included." %}</p>
+            <h2>{% translate "Summary recipients" %}</h2>
+            <p>{{ recipients|join:", "|default:"—" }}</p>
+        {% endif %}
+        {% if rows %}
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>{% translate "Shift" %}</th>
+                            <th>{% translate "Assignments in this plan" %}</th>
+                            <th>{% translate "Minimum staffing" %}</th>
+                            {% if period.state == "published" %}
+                                <th>{% translate "Current ephios plan" %}</th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in rows %}
+                            <tr>
+                                <td>{{ row.start }} – {{ row.end }} · {{ row.label }}</td>
+                                <td>{{ row.people|join:", "|default:"—" }}</td>
+                                <td>{{ row.people|length }} / {{ row.minimum }}{% if row.people|length < row.minimum %} · {% translate "Understaffed" %}{% endif %}</td>
+                                {% if period.state == "published" %}
+                                    <td>
+                                        {% if row.changed %}
+                                            {% translate "Changed in ephios" %}
+                                        {% else %}
+                                            {% translate "Matches the published record" %}
+                                        {% endif %}
+                                        {% if row.url %}<a href="{{ row.url }}">{% translate "Open current shift" %}</a>{% else %} · {% translate "Original shift deleted" %}{% endif %}</td>{% endif %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
+        {% if overrides %}
+            <h2>{% translate "Recorded exceptions" %}</h2>
+            {% for record in overrides %}<p><strong>{{ record.rule_label }}</strong> · {{ record.people_label }} · {{ record.shifts_label }} · {{ record.actor|default:"—" }} · {{ record.created_at }}</p><p>{{ record.reason|linebreaksbr }}</p>{% endfor %}
+        {% endif %}
+        {% if form and period.state != "published" %}
+            {% if underfilled %}
+                <p class="alert alert-warning">{% translate "The rows marked understaffed include missing minimum places. Publication requires explicit confirmation." %}</p>
+            {% endif %}
+            <form method="post"
+                  action="{% url 'ephios_shift_coordination:publish' period.pk %}">
+                {% csrf_token %}
+                {{ form.non_field_errors }}{{ form.expected_version }}{{ form.expected_version.errors }}{{ form.fingerprint }}{{ form.fingerprint.errors }}
+                {% if overrides %}{{ form.confirmed_tokens.as_field_group }}{% endif %}
+                {% if underfilled %}{{ form.confirm_underfilled.as_field_group }}{% endif %}
+                {{ form.confirm_publish.as_field_group }}
+                <p>{% translate "Publication creates confirmed ephios participations and one summary per assigned person through their notification settings." %}</p>
+                <button type="submit"
+                        class="btn btn-primary">{% translate "Publish saved plan" %}</button>
+            </form>
+        {% endif %}
+        {% if period.state != "published" %}
+            <p><a href="{% url 'ephios_shift_coordination:plan' period.pk %}">{% translate "Return to shared draft" %}</a></p>
+        {% endif %}
+        <p><a href="{{ period.get_absolute_url }}">{% translate "Responses and events" %}</a></p>
+    {% endtimezone %}
+{% endblock %}

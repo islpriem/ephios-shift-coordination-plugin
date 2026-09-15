@@ -10,6 +10,12 @@
     <p>{{ response.period.start_date }} – {{ response.period.end_date }} · {{ response.period.effective_state_label }}</p>
     <p>{% translate "Response deadline" %}: {{ response.period.deadline }}</p>
     <p>{% translate "Preferences are not assignments. Only you and authorized coordinators can read your response." %}</p>
+    {% if response.period.state == "published" %}
+        <p>
+            {% translate "Planning is complete. Your current assignments are available in ephios." %}
+            <a href="{% url 'core:settings_calendar' %}">{% translate "Open your calendar settings" %}</a>
+        </p>
+    {% endif %}
     {% if response.submitted_at %}
         <p>{% translate "Response saved" %} · {{ response.updated_at }} · {% translate "Version" %} {{ response.version }}</p>
     {% else %}

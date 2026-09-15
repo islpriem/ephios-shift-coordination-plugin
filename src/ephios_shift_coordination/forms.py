@@ -269,3 +269,29 @@ class SurveyResponseForm(forms.Form):
 
     def ratings(self):
         return {shift.pk: self.cleaned_data[f"rating_{shift.pk}"] for shift in self.offered}
+
+
+class PublicationForm(forms.Form):
+    expected_version = forms.IntegerField(min_value=1, widget=forms.HiddenInput)
+    fingerprint = forms.RegexField(regex=r"^[0-9a-f]{64}$", widget=forms.HiddenInput)
+    confirmed_tokens = forms.MultipleChoiceField(
+        label=_("Confirm every recorded exception for publication"),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+    )
+    confirm_underfilled = forms.BooleanField(
+        label=_("I confirm publication with the missing minimum places shown above."),
+        required=False,
+    )
+    confirm_publish = forms.BooleanField(
+        label=_("I confirm publication of this saved shared draft.")
+    )
+
+    def __init__(self, *args, review, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["confirmed_tokens"].choices = [
+            (record.token, f"{record.rule_label} · {record.people_label} · {record.shifts_label}")
+            for record in review["overrides"]
+        ]
+        self.fields["confirm_underfilled"].required = bool(review["underfilled"])
+        self.initial.update(expected_version=review["version"], fingerprint=review["fingerprint"])

@@ -32,6 +32,8 @@ from .surveys import open_survey, save_response
 @require_http_methods(["GET"])
 def plan(request, pk):
     period = get_object_or_404(PlanningPeriod, pk=pk)
+    if period.state == PlanningPeriod.State.PUBLISHED:
+        return redirect("ephios_shift_coordination:publication", pk=pk)
     context = {"period": period}
     status = 200
     try:
@@ -327,3 +329,65 @@ def survey_detail(request, pk):
         {"response": response, "form": form, "writable": writable},
         status=status,
     )
+
+
+def publication_context(user, pk):
+    from .publication import load_publication, review_publication
+
+    period = get_object_or_404(PlanningPeriod, pk=pk)
+    if period.state == PlanningPeriod.State.PUBLISHED:
+        context = load_publication(user, pk)
+        context.update(
+            version=period.publication_snapshot["draft_version"],
+            fingerprint=period.publication_snapshot["fingerprint"],
+            underfilled=period.publication_snapshot["underfilled"],
+        )
+        return context
+    return review_publication(user, pk)
+
+
+@require_access()
+@require_http_methods(["GET"])
+def publication(request, pk):
+    from .forms import PublicationForm
+
+    try:
+        context = publication_context(request.user, pk)
+        if context["period"].state != PlanningPeriod.State.PUBLISHED:
+            context["form"] = PublicationForm(review=context)
+        return render(request, "ephios_shift_coordination/publication.html", context)
+    except (Conflict, ValidationError) as exc:
+        return render(
+            request,
+            "ephios_shift_coordination/publication.html",
+            {
+                "period": get_object_or_404(PlanningPeriod, pk=pk),
+                "error": str(exc) if isinstance(exc, Conflict) else " ".join(exc.messages),
+            },
+            status=409,
+        )
+
+
+@require_access()
+@require_http_methods(["POST"])
+def publish(request, pk):
+    from .forms import PublicationForm
+    from .publication import publish_plan
+
+    context = {"period": get_object_or_404(PlanningPeriod, pk=pk)}
+    status = 400
+    try:
+        context = publication_context(request.user, pk)
+        form = PublicationForm(request.POST, review=context)
+        context["form"] = form
+        if set(request.POST) - {*form.fields, "csrfmiddlewaretoken"}:
+            raise ValidationError(
+                _("Publication accepts only the saved draft and its confirmations.")
+            )
+        if form.is_valid():
+            publish_plan(request.user, pk, **form.cleaned_data)
+            return redirect("ephios_shift_coordination:publication", pk=pk)
+    except (Conflict, ValidationError) as exc:
+        context["error"] = str(exc) if isinstance(exc, Conflict) else " ".join(exc.messages)
+        status = 409 if isinstance(exc, Conflict) else 400
+    return render(request, "ephios_shift_coordination/publication.html", context, status=status)

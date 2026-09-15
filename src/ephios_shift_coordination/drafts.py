@@ -8,12 +8,19 @@ from zoneinfo import ZoneInfo
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Prefetch, Q
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
-from ephios.core.models import Event, LocalParticipation, Qualification, Shift, UserProfile
+from ephios.core.models import (
+    Event,
+    LocalParticipation,
+    Qualification,
+    QualificationGrant,
+    Shift,
+    UserProfile,
+)
 from ephios.core.services.qualification import collect_all_included_qualifications
 from guardian.shortcuts import get_objects_for_user
 
@@ -48,8 +55,8 @@ class Snapshot:
 def snapshot(user, period_id, *, lock=False):
     # The period lock serializes all plugin writes, including deadline transitions.
     period = get_object_or_404(PlanningPeriod.objects.select_for_update(), pk=period_id)
-    user = UserProfile.objects.get(pk=user.pk)
-    if not enabled() or not can_plan(user):
+    user = UserProfile.objects.filter(pk=user.pk).first()
+    if not user or not enabled() or not can_plan(user):
         raise PermissionDenied
     if period.effective_state != PlanningPeriod.State.PLANNING:
         raise Conflict(
@@ -58,7 +65,10 @@ def snapshot(user, period_id, *, lock=False):
     users = UserProfile.objects.filter(is_active=True).order_by("pk")
     if lock:
         users = users.select_for_update()
-    users = list(users.prefetch_related("qualification_grants"))
+    grants_query = QualificationGrant.objects.order_by("pk")
+    if lock:
+        grants_query = grants_query.select_for_update()
+    users = list(users.prefetch_related(Prefetch("qualification_grants", queryset=grants_query)))
     if lock:
         list(
             Event.all_objects.filter(planning_link__period=period)
@@ -70,6 +80,20 @@ def snapshot(user, period_id, *, lock=False):
             .order_by("pk")
             .select_for_update()
         )
+        # Native disposition can update an existing participation without locking its user.
+        # Lock all states and dates: an edit may move one into the planning window.
+        list(
+            LocalParticipation.objects.filter(
+                user_id__in=[person.pk for person in users],
+                shift__event__type_id=period.template_snapshot["event_type"],
+            )
+            .order_by("pk")
+            .select_for_update()
+        )
+        # Permissions may have changed while waiting for a native writer's locks.
+        user = UserProfile.objects.filter(pk=user.pk).first()
+        if not user or not enabled() or not can_plan(user):
+            raise PermissionDenied
     planned, requirements = check_structure(period, user)
     zone = ZoneInfo(period.timezone)
     targets = Event.objects.filter(pk__in=[link.event.event_id for link in planned])

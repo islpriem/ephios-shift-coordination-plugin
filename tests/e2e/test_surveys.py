@@ -34,18 +34,23 @@ def mail_messages():
 
 
 def test_german_mobile_survey_invitations_reminders_and_deadline():
-    period_id = int(
+    template_id = int(
         in_test_app("""
 import uuid
-from datetime import date
-from ephios.core.models import UserProfile
-from ephios_shift_coordination.models import PlanningSettings, ServiceTemplate
-from ephios_shift_coordination.services import create_period
-period = create_period(UserProfile.objects.get(email='demo-001@example.invalid'),
-    template_id=ServiceTemplate.objects.get(title='Dienst').pk,
-    start_date=date(2031, 4, 1), end_date=date(2031, 4, 30), dates=[date(2031, 4, 2)],
-    rules=PlanningSettings.objects.get(pk=1).snapshot(), creation_key=uuid.uuid4())
-print(period.pk)
+from ephios.core.models import EventType
+from ephios_shift_coordination.models import ServiceTemplate, ShiftTemplate
+source = ServiceTemplate.objects.get(title='Dienst')
+template = ServiceTemplate.objects.create(
+    title=f'Acceptance {uuid.uuid4()}', location='Synthetic test',
+    event_type=EventType.objects.create(title=f'Acceptance {uuid.uuid4()}'))
+template.visible_for.set(source.visible_for.all())
+template.responsible_groups.set(source.responsible_groups.all())
+for original in source.shifts.all():
+    values = {field.name: getattr(original, field.name) for field in ShiftTemplate._meta.fields
+        if field.name not in ('id', 'template')}
+    shift = ShiftTemplate.objects.create(template=template, **values)
+    shift.qualifications.set(original.qualifications.all())
+print(template.pk)
 """)
     )
     base = f"http://127.0.0.1:{os.environ['EPHIOS_HTTP_PORT']}"
@@ -60,7 +65,20 @@ print(period.pk)
         third = browser.new_page(service_workers="block", locale="de-DE")
         try:
             login(coordinator, "demo-001@example.invalid", "demo-only-member-password")
-            coordinator.goto(f"{base}/shift-coordination/planning/{period_id}/")
+            coordinator.goto(f"{base}/shift-coordination/planning/new/")
+            coordinator.locator('[name="template"]').select_option(str(template_id))
+            coordinator.locator('[name="start_date"]').fill("2031-04-01")
+            coordinator.locator('[name="end_date"]').fill("2031-04-30")
+            with coordinator.expect_navigation(wait_until="domcontentloaded"):
+                coordinator.get_by_role("button", name="Datumsauswahl berechnen").click()
+            for checkbox in coordinator.locator('[name="dates"]').all():
+                checkbox.uncheck()
+            coordinator.locator('[name="dates"][value="2031-04-02"]').check()
+            with coordinator.expect_navigation(wait_until="domcontentloaded"):
+                coordinator.get_by_role("button", name="Vorschau aktualisieren").click()
+            with coordinator.expect_navigation(wait_until="domcontentloaded"):
+                coordinator.get_by_role("button", name="Veranstaltungen erstellen").click()
+            period_id = int(coordinator.url.rstrip("/").split("/")[-1])
             local_deadline_time = (
                 coordinator.locator('[name="deadline"]').input_value().split("T")[1]
             )
@@ -198,6 +216,19 @@ print('closed')
             expect(member.get_by_label("Persönliche Höchstzahl", exact=False)).to_have_value("1")
             expect(member.get_by_label("Persönliche Höchstzahl", exact=False)).to_be_disabled()
             member.screenshot(path=".local/test-results/survey-mobile-de.png", full_page=True)
+            from tests.e2e.publication_flow import complete_publication
+
+            complete_publication(
+                browser,
+                coordinator,
+                member,
+                third,
+                base,
+                period_id,
+                in_test_app,
+                mail_messages,
+                port,
+            )
         except Exception:
             capture_failure(coordinator, "survey-coordinator-failure")
             capture_failure(member, "survey-member-failure")

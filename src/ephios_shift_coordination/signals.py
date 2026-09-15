@@ -96,9 +96,9 @@ def event_info(sender, request, event, **kwargs):
 
 @receiver(register_notification_types, dispatch_uid="shift_coordination.notifications")
 def notification_types(sender, **kwargs):
-    from .notifications import SurveyInvitation, SurveyReminder
+    from .notifications import PlanPublished, SurveyInvitation, SurveyReminder
 
-    return [SurveyInvitation, SurveyReminder]
+    return [SurveyInvitation, SurveyReminder, PlanPublished]
 
 
 @receiver(periodic_signal, dispatch_uid="shift_coordination.survey_periodic")

@@ -579,3 +579,105 @@ msgstr "Es liegt kein geprüfter Vorschlag vor. Dein aktueller Entwurf wurde bei
 
 msgid "The planning inputs are inconsistent. Reload and check the source data."
 msgstr "Die Planungsdaten sind widersprüchlich. Lade die Seite neu und prüfe die Ausgangsdaten."
+
+msgid "Save a freshly checked shared draft before reviewing publication."
+msgstr "Speichere einen aktuell geprüften gemeinsamen Entwurf, bevor du die Veröffentlichung prüfst."
+
+msgid "Deleted person #{id}"
+msgstr "Gelöschte Person #{id}"
+
+msgid "Explicitly confirm the saved plan and all publication warnings."
+msgstr "Bestätige den gespeicherten Plan und alle Hinweise zur Veröffentlichung ausdrücklich."
+
+msgid "This period is already published. Its record cannot be replaced."
+msgstr "Dieses Intervall ist bereits veröffentlicht. Sein Nachweis kann nicht ersetzt werden."
+
+msgid "This period has not been published."
+msgstr "Dieses Intervall wurde noch nicht veröffentlicht."
+
+msgid "Your published service plan"
+msgstr "Dein veröffentlichter Dienstplan"
+
+msgid "Your service plan was published on {published}. This message records that published plan. Check ephios for current assignments."
+msgstr "Dein Dienstplan wurde am {published} veröffentlicht. Diese Nachricht dokumentiert diesen veröffentlichten Stand. Prüfe die aktuellen Zuteilungen in ephios."
+
+msgid "Partners in the published plan: {names}"
+msgstr "Dienstpartner im veröffentlichten Plan: {names}"
+
+msgid "Open your calendar settings"
+msgstr "Deine Kalendereinstellungen öffnen"
+
+msgid "Confirm every recorded exception for publication"
+msgstr "Bestätige jede dokumentierte Ausnahme für die Veröffentlichung"
+
+msgid "I confirm publication with the missing minimum places shown above."
+msgstr "Ich bestätige die Veröffentlichung mit den oben gezeigten fehlenden Mindestplätzen."
+
+msgid "I confirm publication of this saved shared draft."
+msgstr "Ich bestätige die Veröffentlichung dieses gespeicherten gemeinsamen Entwurfs."
+
+msgid "Publication accepts only the saved draft and its confirmations."
+msgstr "Die Veröffentlichung akzeptiert nur den gespeicherten Entwurf und seine Bestätigungen."
+
+msgid "Review saved draft for publication"
+msgstr "Gespeicherten Entwurf zur Veröffentlichung prüfen"
+
+msgid "View published plan"
+msgstr "Veröffentlichten Dienstplan ansehen"
+
+msgid "Planning is complete. Your current assignments are available in ephios."
+msgstr "Die Planung ist abgeschlossen. Deine aktuellen Zuteilungen findest du in ephios."
+
+msgid "Publication"
+msgstr "Veröffentlichung"
+
+msgid "Published plan"
+msgstr "Veröffentlichter Dienstplan"
+
+msgid "Published by"
+msgstr "Veröffentlicht von"
+
+msgid "This record preserves the published plan. Make later assignment changes in ephios."
+msgstr "Dieser Nachweis bewahrt den veröffentlichten Dienstplan. Ändere spätere Zuteilungen in ephios."
+
+msgid "Current ephios data differs from this published record."
+msgstr "Die aktuellen ephios-Daten weichen von diesem Veröffentlichungsnachweis ab."
+
+msgid "Only the saved shared draft shown here will be published. Unsaved calendar selections are not included."
+msgstr "Nur der hier gezeigte gespeicherte gemeinsame Entwurf wird veröffentlicht. Ungespeicherte Kalenderauswahlen sind nicht enthalten."
+
+msgid "Summary recipients"
+msgstr "Empfänger der Zusammenfassung"
+
+msgid "Assignments in this plan"
+msgstr "Zuteilungen in diesem Plan"
+
+msgid "Current ephios plan"
+msgstr "Aktueller ephios-Plan"
+
+msgid "Understaffed"
+msgstr "Unterbesetzt"
+
+msgid "Changed in ephios"
+msgstr "In ephios geändert"
+
+msgid "Matches the published record"
+msgstr "Entspricht dem Veröffentlichungsnachweis"
+
+msgid "Open current shift"
+msgstr "Aktuelle Schicht öffnen"
+
+msgid "Original shift deleted"
+msgstr "Ursprüngliche Schicht gelöscht"
+
+msgid "The rows marked understaffed include missing minimum places. Publication requires explicit confirmation."
+msgstr "In den als unterbesetzt markierten Zeilen fehlen Mindestplätze. Die Veröffentlichung erfordert eine ausdrückliche Bestätigung."
+
+msgid "Publication creates confirmed ephios participations and one summary per assigned person through their notification settings."
+msgstr "Die Veröffentlichung erstellt bestätigte ephios-Teilnahmen und eine Zusammenfassung je zugeteilter Person gemäß ihren Benachrichtigungseinstellungen."
+
+msgid "Publish saved plan"
+msgstr "Gespeicherten Dienstplan veröffentlichen"
+
+msgid "Return to shared draft"
+msgstr "Zurück zum gemeinsamen Entwurf"

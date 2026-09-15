@@ -20,7 +20,7 @@ from ephios.core.models import UserProfile
 from ephios.core.models.users import Notification
 from ephios_shift_coordination.models import PlanningSettings, ServiceTemplate
 from ephios_shift_coordination.services import create_period
-from ephios_shift_coordination.surveys import open_survey, save_response
+from ephios_shift_coordination.surveys import open_survey, process_surveys, save_response
 coordinator = UserProfile.objects.get(email='demo-001@example.invalid')
 period = create_period(coordinator, template_id=ServiceTemplate.objects.get(title='Dienst').pk,
     start_date=date(2032, 4, 1), end_date=date(2032, 5, 31), dates=[date(2032, 4, 2)],
@@ -37,6 +37,7 @@ for index in (3, 5):
     ids[str(index)] = person.pk
 period.deadline = timezone.now() - timedelta(seconds=1)
 period.save(update_fields=['deadline'])
+process_surveys()
 print(json.dumps({'period': period.pk, 'shift': period.events.first().shifts.first().pk,
                   'people': ids, 'notifications': Notification.objects.count()}))
 """)

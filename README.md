@@ -3,8 +3,8 @@
 An ephios plugin for availability surveys and recurring service planning.
 
 The plugin targets ephios 0.27.0 and Python 3.14. Planning permissions, settings,
-service templates, recurring event creation, availability surveys and shared planning
-drafts and automatic proposals are implemented. Publication is still in development.
+service templates, recurring event creation, availability surveys, shared planning
+drafts, automatic proposals and publication through native participations are implemented.
 It is based on the [official plugin template](https://github.com/ephios-dev/ephios-plugin-template).
 
 ## Development
@@ -28,11 +28,12 @@ make build       # Wheel, source archive and selected container build inputs
 `make check` is also the pre-commit and CI command. It includes template linting,
 PostgreSQL concurrency tests and browser tests for setup, template editing, date
 selection, event creation, private surveys, deadlines, shared drafts, recorded exceptions,
-proposal preview/adoption and captured reminder mail. Installation and activation are
+proposal preview/adoption, publication, captured summary mail, the existing personal
+calendar feed and later native reassignment. Installation and activation are
 checked again after a normal container restart. The test stack is stopped
 afterwards; its local data is retained. Reports are under `.local/test-results/`.
 Template rendering coverage is reported separately at file level; it does not
-measure template branches. Publication acceptance is still pending.
+measure template branches.
 
 Optimizer checks include exhaustive small cases, invalid solver results and timeouts,
 plus fixed-seed loads of 100 people and about 200 shifts over three months. Separate
@@ -148,6 +149,27 @@ measured separately. Solver time limits are cooperative; the budget is not a har
 guarantee. Configure application and proxy request timeouts above the chosen budget plus
 database overhead when increasing it. Calculation releases database locks, then rechecks
 the input version and fingerprint before returning the result.
+
+Use **Gespeicherten Entwurf zur Veröffentlichung prüfen** to review assignments,
+summary recipients, recorded exceptions and missing minimum places. Confirm every
+exception and any understaffing, then publish the saved plan. The server rechecks
+permissions, the saved version and current data inside the publication transaction.
+Changed inputs require checking and saving the shared draft again before publication.
+
+Publication creates confirmed native ephios participations, retains native logging,
+and records the published assignments, author, time and exceptions. A failed database
+write rolls back the whole operation. Repeating the same publication returns its
+existing record without creating more participations or summary notifications.
+Each assigned person receives one summary through their ephios notification settings;
+delivery starts after commit. Summaries respect current partner visibility and contain
+no survey notes or exception reasons. A delivery failure leaves the plan published and
+the notification available to ephios's existing delivery mechanism.
+
+Members use their existing personal ICS URL in ephios calendar settings. The plugin
+creates no ICS files or separate feed: confirmed participations automatically appear
+in the native calendar. Make later assignment changes through ephios. The plugin keeps
+the original publication record, marks differences and links to current shifts; native
+calendar subscriptions follow those subsequent changes.
 
 The demo loader runs only in the development configuration with the internal
 mail catcher. It is excluded from the plugin distribution and image build inputs.

@@ -60,6 +60,7 @@
                         id="save-draft"
                         disabled>{% translate "Save shared draft" %}</button>
                 <a href="{% url 'ephios_shift_coordination:plan' period.pk %}">{% translate "Reload saved draft" %}</a>
+                <a href="{% url 'ephios_shift_coordination:publication' period.pk %}">{% translate "Review saved draft for publication" %}</a>
                 <span id="draft-status" role="status" aria-live="polite"></span>
             </div>
             <div id="invalid-assignments"></div>

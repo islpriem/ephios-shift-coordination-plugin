@@ -8,6 +8,9 @@
         <p><a class="btn btn-primary"
    href="{% url 'ephios_shift_coordination:plan' period.pk %}">{% translate "Plan services" %}</a></p>
     {% endif %}
+    {% if period.state == "published" %}
+        <p><a href="{% url 'ephios_shift_coordination:publication' period.pk %}">{% translate "View published plan" %}</a></p>
+    {% endif %}
     {% if not period.opened_at %}
         <p>{% translate "The events are visible. No survey has been opened." %}</p>
         <form method="post"

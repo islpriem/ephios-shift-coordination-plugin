@@ -155,6 +155,14 @@ class PlanningPeriod(models.Model):
     state = models.CharField(max_length=16, choices=State.choices, default=State.PREPARATION)
     version = models.PositiveIntegerField(default=1)
     draft_fingerprint = models.CharField(max_length=64, blank=True)
+    published_at = models.DateTimeField(null=True)
+    published_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        models.SET_NULL,
+        null=True,
+        related_name="published_planning_periods",
+    )
+    publication_snapshot = models.JSONField(default=dict)
     opened_at = models.DateTimeField(null=True)
     deadline = models.DateTimeField(null=True)
     opened_structure = models.JSONField(default=dict)
