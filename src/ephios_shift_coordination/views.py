@@ -23,6 +23,7 @@ from .forms import (
     SurveyResponseForm,
 )
 from .models import PlanningPeriod, PlanningSettings, ServiceTemplate, SurveyResponse
+from .proposals import create_proposal
 from .services import Conflict, create_period, preview_template
 from .surveys import open_survey, save_response
 
@@ -83,6 +84,21 @@ def draft_validate(request, pk):
 @require_http_methods(["POST"])
 def draft_save(request, pk):
     return draft_request(request, pk, save=True)
+
+
+@transaction.non_atomic_requests
+@require_access()
+@require_http_methods(["POST"])
+def plan_propose(request, pk):
+    try:
+        payload = json.loads(request.body)
+        if not isinstance(payload, dict) or set(payload) != {"expected_version", "fingerprint"}:
+            raise ValidationError(_("Invalid proposal request."))
+        return JsonResponse(create_proposal(request.user, pk, **payload))
+    except json.JSONDecodeError, UnicodeDecodeError, ValidationError:
+        return JsonResponse({"error": _("Invalid proposal request.")}, status=400)
+    except Conflict as exc:
+        return JsonResponse({"error": str(exc)}, status=409)
 
 
 @require_access("admin")

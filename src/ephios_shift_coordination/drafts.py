@@ -273,13 +273,17 @@ def load_plan(user, period_id):
     }
 
 
-def checked(current, expected_version, fingerprint, assignments):
+def check_basis(current, expected_version, fingerprint):
     if (
         type(expected_version) is not int
         or expected_version != current.period.version
         or fingerprint != current.fingerprint
     ):
         raise Conflict(_("The draft or its inputs have changed. Reload before continuing."))
+
+
+def checked(current, expected_version, fingerprint, assignments):
+    check_basis(current, expected_version, fingerprint)
     if not isinstance(assignments, list) or any(
         not isinstance(pair, list)
         or len(pair) != 2

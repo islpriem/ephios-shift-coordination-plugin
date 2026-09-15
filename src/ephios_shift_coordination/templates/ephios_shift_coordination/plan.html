@@ -15,6 +15,15 @@
         <form id="planning-editor"
               data-validate-url="{% url 'ephios_shift_coordination:draft_validate' period.pk %}"
               data-save-url="{% url 'ephios_shift_coordination:draft_save' period.pk %}"
+              data-propose-url="{% url 'ephios_shift_coordination:plan_propose' period.pk %}"
+              data-calculating="{% translate 'Calculating a complete alternative…' %}"
+              data-filled="{% translate 'Fully staffed shifts' %}"
+              data-yellow="{% translate 'Yellow assignments' %}"
+              data-preferred="{% translate 'Strong preferences' %}"
+              data-partners="{% translate 'Repeated partner pairs' %}"
+              data-empty-proposal="{% translate 'This is a valid empty proposal.' %}"
+              data-replace-draft="{% translate 'Replace your unsaved selections with this complete proposal?' %}"
+              data-proposal-applied="{% translate 'Proposal adopted locally. Save the shared draft to keep it.' %}"
               data-start="{{ period.start_date|date:'Y-m-d' }}"
               data-end="{{ period.end_date|date:'Y-m-d' }}"
               data-selected="{% translate 'Selected' %}"
@@ -42,6 +51,9 @@
             <div class="planning-toolbar">
                 <button type="button"
                         class="btn btn-secondary"
+                        id="calculate-proposal">{% translate "Calculate proposal" %}</button>
+                <button type="button"
+                        class="btn btn-secondary"
                         id="validate-draft">{% translate "Check rules" %}</button>
                 <button type="submit"
                         class="btn btn-primary"
@@ -51,6 +63,18 @@
                 <span id="draft-status" role="status" aria-live="polite"></span>
             </div>
             <div id="invalid-assignments"></div>
+            <section id="proposal-preview"
+                     aria-label="{% translate 'Proposal preview' %}"
+                     hidden>
+                <h2>{% translate "Proposal preview" %}</h2>
+                <p>{% translate "This complete alternative does not include manual exceptions. Adopt it explicitly, then save separately." %}</p>
+                <p id="proposal-status" role="status" aria-live="polite"></p>
+                <div id="proposal-content"></div>
+                <button type="button"
+                        class="btn btn-secondary"
+                        id="adopt-proposal"
+                        disabled>{% translate "Adopt proposal" %}</button>
+            </section>
             <div class="planning-layout">
                 <section aria-label="{% translate 'Service calendar' %}">
                     <label for="planning-month">{% translate "Month" %}</label>

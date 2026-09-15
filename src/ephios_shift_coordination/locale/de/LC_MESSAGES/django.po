@@ -528,3 +528,54 @@ msgstr "Dokumentierte Ausnahmen"
 
 msgid "No recorded exceptions."
 msgstr "Keine dokumentierten Ausnahmen."
+
+msgid "Calculating a complete alternative…"
+msgstr "Eine vollständige Alternative wird berechnet…"
+
+msgid "Fully staffed shifts"
+msgstr "Vollständig besetzte Schichten"
+
+msgid "Yellow assignments"
+msgstr "Gelbe Zuteilungen"
+
+msgid "Strong preferences"
+msgstr "Starke Präferenzen"
+
+msgid "Repeated partner pairs"
+msgstr "Wiederholte Dienstpaare"
+
+msgid "This is a valid empty proposal."
+msgstr "Dies ist ein gültiger leerer Vorschlag."
+
+msgid "Replace your unsaved selections with this complete proposal?"
+msgstr "Deine ungespeicherte Auswahl durch diesen vollständigen Vorschlag ersetzen?"
+
+msgid "Proposal adopted locally. Save the shared draft to keep it."
+msgstr "Vorschlag lokal übernommen. Speichere den gemeinsamen Entwurf, um ihn zu behalten."
+
+msgid "Calculate proposal"
+msgstr "Vorschlag berechnen"
+
+msgid "Proposal preview"
+msgstr "Vorschau des Vorschlags"
+
+msgid "This complete alternative does not include manual exceptions. Adopt it explicitly, then save separately."
+msgstr "Diese vollständige Alternative enthält keine manuellen Ausnahmen. Übernimm sie ausdrücklich und speichere sie anschließend separat."
+
+msgid "Adopt proposal"
+msgstr "Vorschlag übernehmen"
+
+msgid "Invalid proposal request."
+msgstr "Ungültige Anfrage für einen Vorschlag."
+
+msgid "Full staffing, yellow assignments and strong preferences are optimized. Partner variety is a heuristic improvement."
+msgstr "Vollbesetzung, gelbe Zuteilungen und starke Präferenzen sind optimiert. Die Abwechslung bei Dienstpaaren wird heuristisch verbessert."
+
+msgid "The time limit was reached. This proposal follows all rules, but not all priority objectives are proven optimal."
+msgstr "Das Zeitlimit wurde erreicht. Dieser Vorschlag erfüllt alle Regeln, aber nicht alle vorrangigen Ziele sind nachweislich optimal."
+
+msgid "No validated proposal is available. Your current draft has been kept. A time limit does not prove that no suitable plan exists."
+msgstr "Es liegt kein geprüfter Vorschlag vor. Dein aktueller Entwurf wurde beibehalten. Ein Zeitlimit beweist nicht, dass kein geeigneter Plan existiert."
+
+msgid "The planning inputs are inconsistent. Reload and check the source data."
+msgstr "Die Planungsdaten sind widersprüchlich. Lade die Seite neu und prüfe die Ausgangsdaten."

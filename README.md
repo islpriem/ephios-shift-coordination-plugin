@@ -4,7 +4,7 @@ An ephios plugin for availability surveys and recurring service planning.
 
 The plugin targets ephios 0.27.0 and Python 3.14. Planning permissions, settings,
 service templates, recurring event creation, availability surveys and shared planning
-drafts are implemented. Automatic proposals and publication are still in development.
+drafts and automatic proposals are implemented. Publication is still in development.
 It is based on the [official plugin template](https://github.com/ephios-dev/ephios-plugin-template).
 
 ## Development
@@ -27,12 +27,19 @@ make build       # Wheel, source archive and selected container build inputs
 
 `make check` is also the pre-commit and CI command. It includes template linting,
 PostgreSQL concurrency tests and browser tests for setup, template editing, date
-selection, event creation, private surveys, deadlines, shared drafts, recorded exceptions
-and captured reminder mail. Installation and activation are
+selection, event creation, private surveys, deadlines, shared drafts, recorded exceptions,
+proposal preview/adoption and captured reminder mail. Installation and activation are
 checked again after a normal container restart. The test stack is stopped
 afterwards; its local data is retained. Reports are under `.local/test-results/`.
 Template rendering coverage is reported separately at file level; it does not
-measure template branches. Automatic proposals and publication acceptance is still pending.
+measure template branches. Publication acceptance is still pending.
+
+Optimizer checks include exhaustive small cases, invalid solver results and timeouts,
+plus fixed-seed loads of 100 people and about 200 shifts over three months. Separate
+realistic and scarce cases record model/stage timings and validated results. Browser
+load reports also record the full HTTP time, snapshot query count and database/runtime
+versions. Pure calculations run under a subprocess watchdog; HTTP tests have an outer
+timeout and exercise the calendar during calculation.
 
 ## Local stack
 
@@ -119,6 +126,28 @@ Saving replaces the shared draft and records the exceptions without changing res
 creating native participations or sending email. Other coordinators see it after loading.
 Stale versions or changed native inputs require reloading; deleted or inaccessible targets
 cannot be overridden. Recorded reasons remain available after subsequent draft edits.
+
+**Vorschlag berechnen** creates a complete alternative from current responses and native
+commitments. It first maximizes fully staffed shifts, then minimizes yellow assignments,
+then maximizes strong preferences. Each proposed shift has exactly its minimum staffing
+or stays empty. A final bounded heuristic reduces repeated pairs without changing those
+three scores or breaking a rule. Existing draft selections and manual exceptions are
+not optimizer inputs. The pure Python entry point is `optimizer.propose_plan(PlanningInput)`;
+its data contract contains IDs, times, limits and ratings, with no names or notes.
+
+The preview reports whether all three priority objectives were proven optimal or the
+time limit left a validated intermediate result. A valid empty proposal is shown explicitly.
+Calculation changes no saved assignments. **Vorschlag übernehmen** replaces the local
+selection, with confirmation when there are unsaved edits; save the shared draft separately.
+Failed calculations keep the current selections. Changed permissions, versions or native
+inputs require a fresh check before a proposal can be used or saved.
+
+The default calculation budget is 10 seconds, shared by model preparation, all solver
+stages, partner improvement and final validation. Database reads and HTTP overhead are
+measured separately. Solver time limits are cooperative; the budget is not a hard real-time
+guarantee. Configure application and proxy request timeouts above the chosen budget plus
+database overhead when increasing it. Calculation releases database locks, then rechecks
+the input version and fingerprint before returning the result.
 
 The demo loader runs only in the development configuration with the internal
 mail catcher. It is excluded from the plugin distribution and image build inputs.

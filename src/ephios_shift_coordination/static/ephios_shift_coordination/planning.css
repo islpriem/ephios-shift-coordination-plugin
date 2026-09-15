@@ -57,6 +57,8 @@
 .planning-exception { margin-block: 1rem; padding: 1rem; border: 1px solid #856300; }
 .planning-exception label { display: block; }
 .planning-exception textarea { display: block; width: 100%; max-width: 42rem; }
+#proposal-preview { border: 1px solid #005a82; padding: 1rem; margin-block: 1rem; }
+#proposal-content ul { max-height: 20rem; overflow-y: auto; }
 @media (max-width: 1100px) {
     .planning-layout { grid-template-columns: minmax(0, 1fr); }
     .planning-layout > section { overflow-x: auto; }

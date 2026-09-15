@@ -12,6 +12,14 @@ const month = document.getElementById("planning-month");
 const status = document.getElementById("draft-status");
 const save = document.getElementById("save-draft");
 const validation = document.getElementById("planning-validation");
+const calculate = document.getElementById("calculate-proposal");
+const adopt = document.getElementById("adopt-proposal");
+const preview = document.getElementById("proposal-preview");
+const proposalStatus = document.getElementById("proposal-status");
+const proposalContent = document.getElementById("proposal-content");
+let proposal = null, calculating = false;
+const signature = pairs => pairs.map(pair => pair.join(":")).sort().join(",");
+let savedSignature = signature(data.assignments);
 let revision = 0, timer, saving = false, conflict = false, validated = false;
 
 function element(tag, text, parent) {
@@ -163,7 +171,7 @@ async function request(url, body) {
     const response = await fetch(url, {method: "POST", credentials: "same-origin",
         headers: {"Content-Type": "application/json", "X-CSRFToken": editor.querySelector('[name="csrfmiddlewaretoken"]').value},
         body: JSON.stringify(body)});
-    const result = await response.json();
+    const result = await response.json().catch(() => { throw new Error(words.failed); });
     if (!response.ok) {
         const error = new Error(result.error ?? words.failed);
         error.conflict = response.status === 409;
@@ -182,7 +190,7 @@ async function check() {
         if (currentRevision !== revision) return;
         renderValidation(result);
         validated = true;
-        save.disabled = false;
+        save.disabled = calculating;
         status.textContent = words.checked;
     } catch (error) {
         if (currentRevision !== revision) return;
@@ -192,29 +200,80 @@ async function check() {
 }
 editor.addEventListener("submit", async event => {
     event.preventDefault();
-    if (!validated || saving || conflict || !editor.reportValidity()) return;
+    if (!validated || saving || calculating || conflict || !editor.reportValidity()) return;
     const body = {...payload(), confirmations: [...validation.querySelectorAll("[data-token]")].map(box => ({
         token: box.dataset.token, confirmed: box.querySelector("input").checked,
         reason: box.querySelector("textarea").value}))};
     saving = true;
-    const controls = [...editor.querySelectorAll("input, select, textarea, button")];
-    controls.forEach(control => { control.disabled = true; });
+    const controls = [...editor.querySelectorAll("input, select, textarea, button")].map(control => [control, control.disabled]);
+    controls.forEach(([control]) => { control.disabled = true; });
     try {
         const result = await request(words.saveUrl, body);
         data.version = result.version;
         data.fingerprint = result.fingerprint;
+        savedSignature = signature(state.assignments());
+        proposal = null;
+        preview.hidden = true;
         status.textContent = words.saved;
     } catch (error) {
         conflict = Boolean(error.conflict);
         status.textContent = error.message || words.failed;
     } finally {
         saving = false;
-        controls.forEach(control => { control.disabled = false; });
+        controls.forEach(([control, wasDisabled]) => { control.disabled = wasDisabled; });
         save.disabled = conflict;
     }
 });
 document.getElementById("validate-draft").addEventListener("click", () => { clearTimeout(timer); check(); });
 month.addEventListener("change", renderCalendar);
+
+calculate.addEventListener("click", async () => {
+    if (calculating || saving || conflict) return;
+    calculating = true;
+    calculate.disabled = true;
+    save.disabled = true;
+    adopt.disabled = true;
+    proposal = null;
+    preview.hidden = false;
+    proposalContent.replaceChildren();
+    proposalStatus.textContent = words.calculating;
+    try {
+        const result = await request(words.proposeUrl, {expected_version: data.version, fingerprint: data.fingerprint});
+        proposalStatus.textContent = result.message;
+        if (!["optimal_primary", "feasible_timeout"].includes(result.status)) return;
+        if (result.version !== data.version || result.fingerprint !== data.fingerprint ||
+            !result.assignments.every(([uid, sid]) => people.has(uid) && shifts.has(sid))) {
+            throw new Error(words.failed);
+        }
+        const score = result.score;
+        element("p", `${words.filled}: ${score.filled} · ${words.yellow}: ${score.yellow} · ${words.preferred}: ${score.preferred} · ${words.partners}: ${score.partner_repeats}`, proposalContent);
+        if (!result.assignments.length) element("p", words.emptyProposal, proposalContent);
+        const list = element("ul", undefined, proposalContent);
+        for (const shift of data.shifts) {
+            const names = result.assignments.filter(pair => pair[1] === shift.id).map(pair => people.get(pair[0]).name);
+            element("li", `${shift.date} ${shift.label}: ${names.join(", ") || "—"} (${names.length} / ${shift.minimum})`, list);
+        }
+        proposal = result;
+        adopt.disabled = false;
+    } catch (error) {
+        conflict = Boolean(error.conflict);
+        proposalStatus.textContent = error.message || words.failed;
+    } finally {
+        calculating = false;
+        calculate.disabled = conflict;
+        save.disabled = !validated || conflict;
+    }
+});
+adopt.addEventListener("click", () => {
+    if (!proposal || calculating || saving || conflict) return;
+    if (signature(state.assignments()) !== savedSignature && !window.confirm(words.replaceDraft)) return;
+    state.replace(proposal.assignments);
+    document.getElementById("invalid-assignments").replaceChildren();
+    renderCalendar();
+    changed();
+    proposalStatus.textContent = words.proposalApplied;
+    adopt.disabled = true;
+});
 
 const start = words.start.slice(0, 7), end = words.end.slice(0, 7);
 for (let value = start; value <= end;) {

@@ -186,3 +186,61 @@ def test_parallel_draft_saves_have_exactly_one_winner(planning_data, monkeypatch
     assert DraftAssignment.objects.filter(period=period).count() == 1
     period.refresh_from_db()
     assert period.version == plan["version"] + 1
+
+
+def test_proposal_releases_locks_and_detects_a_draft_saved_during_calculation(
+    planning_data, monkeypatch
+):
+    from threading import Event as ThreadEvent
+
+    from ephios_shift_coordination import proposals
+    from ephios_shift_coordination.drafts import load_plan, save_draft
+    from ephios_shift_coordination.services import Conflict
+    from ephios_shift_coordination.surveys import open_survey, save_response
+    from tests.test_surveys import answer
+
+    data = planning_data
+    period = survey_fixture(data)
+    period = open_survey(data.coordinator, period.pk, expected_version=1)
+    response = period.responses.get(user=data.member)
+    save_response(data.member, period.pk, **{**answer(response), "maximum": 2})
+    monkeypatch.setattr("django.utils.timezone.now", lambda: period.deadline)
+    plan = load_plan(data.coordinator, period.pk)
+    loaded, proceed = ThreadEvent(), ThreadEvent()
+    original = proposals.propose_plan
+
+    def calculate(pure_input):
+        loaded.set()
+        assert proceed.wait(timeout=10), "A draft save could not proceed while calculating."
+        return original(pure_input)
+
+    monkeypatch.setattr(proposals, "propose_plan", calculate)
+
+    def run_proposal():
+        close_old_connections()
+        try:
+            return proposals.create_proposal(
+                data.coordinator,
+                period.pk,
+                expected_version=plan["version"],
+                fingerprint=plan["fingerprint"],
+            )
+        finally:
+            connections.close_all()
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(run_proposal)
+        assert loaded.wait(timeout=10)
+        save_draft(
+            data.coordinator,
+            period.pk,
+            expected_version=plan["version"],
+            fingerprint=plan["fingerprint"],
+            assignments=[],
+            confirmations=[],
+        )
+        proceed.set()
+        with pytest.raises(Conflict):
+            future.result(timeout=15)
+    period.refresh_from_db()
+    assert period.version == plan["version"] + 1

@@ -9,6 +9,7 @@ planning_patterns = [
     path("planning/<int:pk>/", views.period_detail, name="period_detail"),
     path("planning/<int:pk>/open/", views.survey_open, name="survey_open"),
     path("planning/<int:pk>/plan/", views.plan, name="plan"),
+    path("planning/<int:pk>/propose/", views.plan_propose, name="plan_propose"),
     path("planning/<int:pk>/validate/", views.draft_validate, name="draft_validate"),
     path("planning/<int:pk>/draft/", views.draft_save, name="draft_save"),
     path("surveys/<int:pk>/", views.survey_detail, name="survey_detail"),
