@@ -276,6 +276,23 @@ def test_failed_assignment_or_audit_write_rolls_back_whole_draft(draft_data, mon
     assert result["version"] == version and result["assignments"] == initial["assignments"]
 
 
+def test_exceptions_are_confirmed_together_and_the_shared_note_may_be_empty(draft_data):
+    data = draft_data
+    data.period.responses.filter(user=data.member).update(maximum=0)
+    # The second shift needs two people, so one assignment breaks two rules at once.
+    initial = payload(data, [[data.member.pk, data.shifts[1].pk]])
+    violations = validate_draft(data.coordinator, data.period.pk, **initial)["violations"]
+    assert {v["code"] for v in violations} >= {"personal_maximum", "shift_incomplete"}
+    save_draft(
+        data.coordinator,
+        data.period.pk,
+        **initial,
+        confirmations=[{"token": v["token"], "confirmed": True, "reason": ""} for v in violations],
+    )
+    assert data.period.rule_overrides.count() == len(violations)
+    assert set(data.period.rule_overrides.values_list("reason", flat=True)) == {""}
+
+
 def test_changed_violation_cannot_reuse_confirmation(draft_data):
     data = draft_data
     response = data.period.responses.get(user=data.member)
@@ -371,3 +388,52 @@ def test_native_individual_start_uses_period_timezone_for_day_and_week(draft_dat
     )
     assert not result["violations"]
     assert result["counts"][data.member.pk]["existing"] == 1
+
+
+def test_planning_during_the_open_survey_keeps_it_open_and_waits_for_publication(survey_data):
+    from ephios_shift_coordination.publication import review_publication
+    from ephios_shift_coordination.surveys import close_survey
+
+    data = survey_data
+    period = open_for(data)
+    response = period.responses.get(user=data.member)
+    save_response(data.member, period.pk, **{**answer(response), "maximum": 2})
+    plan = load_plan(data.coordinator, period.pk)
+    assert plan["survey_open"] is True
+    saved = save_draft(
+        data.coordinator,
+        period.pk,
+        expected_version=plan["version"],
+        fingerprint=plan["fingerprint"],
+        assignments=[[data.member.pk, data.shifts[0].pk]],
+        confirmations=[],
+    )
+    period.refresh_from_db()
+    assert period.state == period.State.SURVEY_OPEN
+    with pytest.raises(Conflict, match="Close the survey"):
+        review_publication(data.coordinator, period.pk)
+    # A changed answer makes the saved draft outdated, even while the survey runs.
+    save_response(
+        data.member, period.pk, **{**answer(response), "expected_version": 1, "maximum": 1}
+    )
+    with pytest.raises(Conflict):
+        save_draft(
+            data.coordinator,
+            period.pk,
+            expected_version=saved["version"],
+            fingerprint=saved["fingerprint"],
+            assignments=[],
+            confirmations=[],
+        )
+    close_survey(data.coordinator, period.pk, expected_version=saved["version"])
+    current = load_plan(data.coordinator, period.pk)
+    assert current["survey_open"] is False
+    save_draft(
+        data.coordinator,
+        period.pk,
+        expected_version=current["version"],
+        fingerprint=current["fingerprint"],
+        assignments=[[data.member.pk, data.shifts[0].pk]],
+        confirmations=[],
+    )
+    assert review_publication(data.coordinator, period.pk)["recipients"] == ["member"]

@@ -1,3 +1,4 @@
+from dataclasses import asdict
 from datetime import timedelta
 
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -9,7 +10,7 @@ from ephios.core.models import UserProfile
 from ephios.core.models.users import Notification
 
 from .access import can_plan, enabled
-from .ephios_integration import check_structure, eligible
+from .ephios_integration import check_structure, eligibility, eligible, period_shifts
 from .models import (
     Availability,
     NotificationDispatch,
@@ -18,6 +19,7 @@ from .models import (
     SurveyResponse,
 )
 from .services import Conflict
+from .suggestions import suggest_maximum
 
 
 def dispatch(response, kind, key, *, skipped=False):
@@ -37,8 +39,51 @@ def dispatch(response, kind, key, *, skipped=False):
         record.save(update_fields=["notification"])
 
 
+def recommendation(values):
+    """One sentence about the recommended personal maximum, or an empty string."""
+    maximum = (values or {}).get("maximum")
+    if maximum is None:
+        return ""
+    if values.get("places") and values.get("fillable") == values.get("places"):
+        return _(
+            "If everybody takes on {maximum} shifts on average in this period, all {shifts} "
+            "shifts can be staffed."
+        ).format(maximum=maximum, shifts=values["shifts"])
+    return _(
+        "We suggest about {maximum} shifts per person. Some shifts may stay open even then, "
+        "so every shift you can take helps."
+    ).format(maximum=maximum)
+
+
+def survey_capacity(shifts, cohort, maximum=None):
+    """Recommended personal maximum and the staffing this cohort could reach with it."""
+    demands = {
+        planned.pk: planned.shift.structure_configuration["minimum_number_of_participants"]
+        for planned in shifts
+        if planned.shift
+    }
+    offers = {
+        uid: {planned.pk for planned in offered} for uid, (_visible, offered) in cohort.items()
+    }
+    return asdict(suggest_maximum(demands, offers, maximum))
+
+
+def capacity_preview(period, maximum=None):
+    """Estimate the capacity before opening, when the cohort is not frozen yet."""
+    shifts = period_shifts(period)
+    members = UserProfile.objects.filter(is_active=True).prefetch_related("qualification_grants")
+    return survey_capacity(shifts, eligibility(list(members), shifts), maximum)
+
+
 def open_survey(
-    user, period_id, *, expected_version, deadline=None, reminder_days=None, open_now=True
+    user,
+    period_id,
+    *,
+    expected_version,
+    deadline=None,
+    reminder_days=None,
+    maximum=None,
+    open_now=True,
 ):
     with transaction.atomic():
         period = PlanningPeriod.objects.select_for_update().get(pk=period_id)
@@ -64,23 +109,49 @@ def open_survey(
         period.deadline = deadline
         period.rules = configuration.snapshot()
         period.version += 1
+        recommended = maximum if maximum is not None else period.suggestion.get("maximum")
+        period.suggestion = {**period.suggestion, "maximum": recommended}
         if open_now:
             period.opened_at = now
             period.opened_structure = requirements
             period.state = PlanningPeriod.State.SURVEY_OPEN
-            for member in UserProfile.objects.filter(is_active=True).prefetch_related(
-                "qualification_grants"
-            ):
-                offered = [shift for shift in shifts if eligible(member, shift)]
-                if offered:
+            members = list(
+                UserProfile.objects.filter(is_active=True).prefetch_related("qualification_grants")
+            )
+            cohort = eligibility(members, shifts)
+            observers = period.rules["allow_observers"]
+            for member in members:
+                visible, offered = cohort[member.pk]
+                # With observers, everybody who sees the services can offer to sit in.
+                if offered or (observers and visible):
                     response = SurveyResponse.objects.create(period=period, user=member)
                     response.offered_shifts.set(offered)
                     dispatch(response, "invitation", "opening")
+            period.suggestion = survey_capacity(shifts, cohort, recommended)
         period.save()
         return period
 
 
-def save_response(user, period_id, *, expected_version, maximum, notes, ratings):
+def close_survey(user, period_id, *, expected_version):
+    """End an open survey early: answers become read-only, planning continues."""
+    with transaction.atomic():
+        period = PlanningPeriod.objects.select_for_update().get(pk=period_id)
+        user = UserProfile.objects.get(pk=user.pk)
+        if not enabled() or not can_plan(user):
+            raise PermissionDenied
+        check_structure(period, user)
+        if period.state != PlanningPeriod.State.SURVEY_OPEN or period.version != expected_version:
+            raise Conflict(_("This period has changed. Reload before continuing."))
+        period.deadline = min(period.deadline, timezone.now())
+        period.state = PlanningPeriod.State.PLANNING
+        period.version += 1
+        period.save(update_fields=["deadline", "state", "version"])
+        return period
+
+
+def save_response(
+    user, period_id, *, expected_version, maximum, notes, ratings, observer_events=()
+):
     with transaction.atomic():
         period = PlanningPeriod.objects.select_for_update().get(pk=period_id)
         user = UserProfile.objects.get(pk=user.pk)
@@ -100,6 +171,13 @@ def save_response(user, period_id, *, expected_version, maximum, notes, ratings)
         offered = list(response.offered_shifts.select_related("shift__event"))
         if any(not user.has_perm("core.view_event", shift.shift.event) for shift in offered):
             raise PermissionDenied
+        wished = set()
+        if period.rules.get("allow_observers"):
+            wished = {
+                link.pk
+                for link in period.events.select_related("event")
+                if link.event and link.event.active and user.has_perm("core.view_event", link.event)
+            }
         if (
             type(maximum) is not int
             or not 0 <= maximum <= 2147483647
@@ -109,10 +187,14 @@ def save_response(user, period_id, *, expected_version, maximum, notes, ratings)
             or any(type(pk) is not int for pk in ratings)
             or set(ratings) != {shift.pk for shift in offered}
             or any(rating not in Availability.Rating.values for rating in ratings.values())
+            or not isinstance(observer_events, list | tuple | set)
+            or any(type(pk) is not int for pk in observer_events)
+            or not set(observer_events) <= wished
         ):
             raise ValidationError(
                 _("Provide a non-negative maximum and a rating for every offered shift.")
             )
+        response.observer_events.set(set(observer_events))
         response.maximum, response.notes = maximum, notes
         response.submitted_at = response.submitted_at or now
         response.updated_at = now
@@ -136,9 +218,20 @@ def response_is_actionable(response):
         and response.submitted_at is None
         and period.state == PlanningPeriod.State.SURVEY_OPEN
         and timezone.now() < period.deadline
-        and any(
-            eligible(response.user, shift)
-            for shift in response.offered_shifts.select_related("shift__event__type")
+        and (
+            any(
+                eligible(response.user, shift)
+                for shift in response.offered_shifts.select_related("shift__event__type")
+            )
+            or (
+                period.rules.get("allow_observers")
+                and any(
+                    link.event
+                    and link.event.active
+                    and response.user.has_perm("core.view_event", link.event)
+                    for link in period.events.select_related("event")
+                )
+            )
         )
     )
 

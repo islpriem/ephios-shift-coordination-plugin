@@ -10,12 +10,14 @@ from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.translation import gettext as _
 from ephios.core.models import Event, LocalParticipation, Shift, UserProfile
+from ephios.core.models.events import PlaceholderParticipation
 from ephios.core.models.users import Notification
 from ephios.core.services.notifications.backends import send_all_notifications
 
 from .access import can_plan, enabled
 from .drafts import RULE_LABELS, checked, snapshot
-from .models import NotificationDispatch, PlannedShift, PlanningPeriod
+from .ephios_integration import observer_name
+from .models import NotificationDispatch, ObserverParticipation, PlannedShift, PlanningPeriod
 from .scheduling import fingerprint as digest
 from .services import Conflict
 
@@ -35,19 +37,22 @@ def check_access(user, period):
 
 def saved_plan(current):
     period = current.period
+    if period.effective_state != PlanningPeriod.State.PLANNING:
+        raise Conflict(_("Close the survey before publishing this plan."))
     if not period.draft_fingerprint or period.draft_fingerprint != current.fingerprint:
         raise Conflict(_("Save a freshly checked shared draft before reviewing publication."))
-    assignments = [
-        list(pair)
-        for pair in period.draft_assignments.order_by(
-            "original_user_id", "planned_shift_id"
-        ).values_list("original_user_id", "planned_shift_id")
-    ]
-    result = checked(current, period.version, current.fingerprint, assignments)
+    saved = list(
+        period.draft_assignments.order_by("original_user_id", "planned_shift_id").values_list(
+            "original_user_id", "planned_shift_id", "observer"
+        )
+    )
+    assignments = [[uid, sid] for uid, sid, observer in saved if not observer]
+    observers = [[uid, sid] for uid, sid, observer in saved if observer]
+    result = checked(current, period.version, current.fingerprint, assignments, observers)
     overrides = list(period.rule_overrides.filter(draft_version=period.version).order_by("pk"))
     if {record.token for record in overrides} != {v.token for v in result.violations}:
         raise Conflict(_("Save a freshly checked shared draft before reviewing publication."))
-    return assignments, result, overrides
+    return assignments, observers, result, overrides
 
 
 def person_names(ids):
@@ -81,22 +86,27 @@ def override_rows(period, ids):
 @transaction.atomic
 def review_publication(user, period_id):
     current = snapshot(user, period_id)
-    assignments, result, overrides = saved_plan(current)
+    assignments, observers, result, overrides = saved_plan(current)
     names = {person["id"]: person["name"] for person in current.people}
+    staffed = {sid for uid, sid in assignments + observers}
     return {
         "period": current.period,
         "version": current.period.version,
         "fingerprint": current.fingerprint,
+        "filled": len(staffed - {sid for sid, _count, _minimum in result.underfilled}),
+        "total": len(current.shifts),
         "rows": [
             {
                 **shift,
                 "start": datetime.fromisoformat(shift["start"]),
                 "end": datetime.fromisoformat(shift["end"]),
                 "people": [names[uid] for uid, sid in assignments if sid == shift["id"]],
+                "observers": [names[uid] for uid, sid in observers if sid == shift["id"]],
+                "staffed": sum(sid == shift["id"] for uid, sid in assignments + observers),
             }
             for shift in current.shifts
         ],
-        "recipients": [names[uid] for uid in sorted({uid for uid, sid in assignments})],
+        "recipients": [names[uid] for uid in sorted({uid for uid, sid in assignments + observers})],
         "underfilled": [list(row) for row in result.underfilled],
         "overrides": override_rows(current.period, [record.pk for record in overrides]),
     }
@@ -140,7 +150,7 @@ def publish_plan(
     current = snapshot(user, period_id, lock=True)
     if expected_version != current.period.version or fingerprint != current.fingerprint:
         raise Conflict(_("The draft or its inputs have changed. Reload before continuing."))
-    assignments, result, overrides = saved_plan(current)
+    assignments, observers, result, overrides = saved_plan(current)
     if set(confirmed_tokens) != {v.token for v in result.violations} or (
         result.underfilled and not confirm_underfilled
     ):
@@ -156,6 +166,19 @@ def publish_plan(
         # Native save retains visibility and model logging without disposition's per-shift mails.
         participation.save()
         participations[uid, sid] = participation.pk
+    names = person_names({uid for uid, sid in observers})
+    for uid, sid in observers:
+        # People sitting in join as native placeholders: staffed, but without working hours.
+        placeholder = PlaceholderParticipation(
+            shift=targets[sid].shift,
+            display_name=observer_name(names[uid]),
+            state=PlaceholderParticipation.States.CONFIRMED,
+        )
+        placeholder.save()
+        ObserverParticipation.objects.create(
+            participation=placeholder, planned_shift=targets[sid], user_id=uid
+        )
+        participations[uid, sid] = placeholder.pk
     period.published_at = timezone.now()
     period.published_by_id = user.pk
     period.publication_snapshot = {
@@ -174,8 +197,13 @@ def publish_plan(
                 "event_type_id": period.template_snapshot["event_type"],
                 **link.snapshot,
                 "members": [
-                    {"user_id": uid, "participation_id": participations[uid, sid]}
-                    for uid, sid in assignments
+                    {
+                        "user_id": uid,
+                        "participation_id": participations[uid, sid],
+                        "observer": observer,
+                    }
+                    for entries, observer in ((assignments, False), (observers, True))
+                    for uid, sid in entries
                     if sid == link.pk
                 ],
             }
@@ -187,7 +215,7 @@ def publish_plan(
     period.save(
         update_fields=["version", "state", "published_at", "published_by", "publication_snapshot"]
     )
-    for uid in sorted({uid for uid, sid in assignments}):
+    for uid in sorted({uid for uid, sid in assignments + observers}):
         dispatch = NotificationDispatch.objects.create(
             period=period, user_id=uid, kind="publication", key=f"version:{period.version}"
         )
@@ -222,7 +250,10 @@ def load_publication(user, period_id):
         current = native.get(shift["native_id"])
         changed = current is None
         if current:
-            expected = {(m["participation_id"], m["user_id"]) for m in shift["members"]}
+            expected = {
+                (m["participation_id"], None if m.get("observer") else m["user_id"])
+                for m in shift["members"]
+            }
             existing = list(current.participations.all())
             changed = (
                 not current.event.active
@@ -252,7 +283,8 @@ def load_publication(user, period_id):
                 "start": datetime.fromisoformat(shift["start_time"]),
                 "end": datetime.fromisoformat(shift["end_time"]),
                 "minimum": shift["structure_configuration"]["minimum_number_of_participants"],
-                "people": [names[m["user_id"]] for m in shift["members"]],
+                "people": [names[m["user_id"]] for m in shift["members"] if not m.get("observer")],
+                "observers": [names[m["user_id"]] for m in shift["members"] if m.get("observer")],
                 "changed": bool(changed),
                 "url": current.get_absolute_url() if current else None,
             }
@@ -261,5 +293,9 @@ def load_publication(user, period_id):
         "period": period,
         "rows": rows,
         "changed": any(row["changed"] for row in rows),
+        "filled": sum(
+            1 for row in rows if len(row["people"]) + len(row["observers"]) >= row["minimum"]
+        ),
+        "total": len(rows),
         "overrides": override_rows(period, record["override_ids"]),
     }

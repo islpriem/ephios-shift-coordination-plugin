@@ -1,3 +1,6 @@
+"""Business messages: survey invitation, reminder, published plan and staffing changes."""
+
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from django.urls import reverse
@@ -7,37 +10,101 @@ from django.utils.translation import gettext_lazy as _
 from ephios.core.services.notifications.types import AbstractNotificationHandler
 from ephios.core.templatetags.settings_extras import make_absolute
 
-from .models import SurveyResponse
-from .surveys import response_is_actionable
+from .models import PlannedShift, PlanningPeriod, SurveyResponse
+from .surveys import recommendation, response_is_actionable
+
+
+def period_label(period):
+    """The period is its date range: the service name is already in every subject line."""
+    return "{start} – {end}".format(
+        start=date_format(period.start_date, "SHORT_DATE_FORMAT"),
+        end=date_format(period.end_date, "SHORT_DATE_FORMAT"),
+    )
+
+
+def local_time(value, period, fmt="DATETIME_FORMAT"):
+    return date_format(timezone.localtime(value, ZoneInfo(period.timezone)), fmt)
+
+
+def shift_label(period, snapshot):
+    return "{start} – {end} · {label}".format(
+        start=local_time(datetime.fromisoformat(snapshot["start_time"]), period),
+        end=local_time(datetime.fromisoformat(snapshot["end_time"]), period, "TIME_FORMAT"),
+        label=snapshot["label"],
+    )
+
+
+def text(lines):
+    """Join message lines; blank lines separate paragraphs and lists in mail and web."""
+    return "\n".join(str(line) for line in lines)
 
 
 class SurveyInvitation(AbstractNotificationHandler):
     slug = "shift_coordination_invitation"
-    title = _("Invitation to an availability survey")
+    title = _("Invitation to an availability survey for a service plan")
+
+    @classmethod
+    def response(cls, notification):
+        return (
+            SurveyResponse.objects.select_related("period")
+            .filter(period_id=notification.data["period_id"], user_id=notification.user_id)
+            .first()
+        )
 
     @classmethod
     def get_subject(cls, notification):
-        return cls.title
+        response = cls.response(notification)
+        if response is None:
+            return str(cls.title)
+        return _("Service planning {period}: when can you help?").format(
+            period=period_label(response.period)
+        )
+
+    @classmethod
+    def opening(cls, response):
+        return _(
+            "we are planning the services from {period}. Please tell us by {deadline} when "
+            "you could take a shift."
+        ).format(
+            period=period_label(response.period),
+            deadline=local_time(response.period.deadline, response.period),
+        )
 
     @classmethod
     def get_body(cls, notification):
-        response = SurveyResponse.objects.select_related("period").get(
-            period_id=notification.data["period_id"], user_id=notification.user_id
-        )
-        return _(
-            "Please submit your availability by {deadline}. Preferences are not assignments."
-        ).format(
-            deadline=date_format(
-                timezone.localtime(response.period.deadline, ZoneInfo(response.period.timezone)),
-                "DATETIME_FORMAT",
+        response = cls.response(notification)
+        if response is None:
+            return ""
+        period = response.period
+        lines = [
+            _("Hello {name},").format(name=notification.user.get_full_name()),
+            "",
+            cls.opening(response),
+            "",
+            _("- Rate every shift: unavailable, if needed, available or preferred."),
+            _("- Your personal maximum is the number of shifts we may assign to you at most."),
+        ]
+        if recommendation(period.suggestion):
+            lines.append(f"- {recommendation(period.suggestion)}")
+        if period.rules.get("allow_observers"):
+            lines.append(
+                _("- You can also offer to sit in on a service without taking a shift yourself.")
             )
-        )
+        lines += [
+            "",
+            _(
+                "Your answer is not an assignment yet. Once the plan is published you will get "
+                "a message with the shifts you are staffed for."
+            ),
+            _("You can change your answer until the deadline."),
+        ]
+        return text(lines)
 
     @classmethod
     def get_actions(cls, notification):
         return [
             (
-                str(_("Open your survey")),
+                str(_("Enter your availability")),
                 make_absolute(
                     reverse(
                         "ephios_shift_coordination:survey_detail",
@@ -49,17 +116,32 @@ class SurveyInvitation(AbstractNotificationHandler):
 
     @classmethod
     def is_obsolete(cls, notification):
-        response = (
-            SurveyResponse.objects.select_related("period", "user")
-            .filter(period_id=notification.data["period_id"], user_id=notification.user_id)
-            .first()
-        )
+        response = cls.response(notification)
         return response is None or not response_is_actionable(response)
 
 
 class SurveyReminder(SurveyInvitation):
     slug = "shift_coordination_reminder"
-    title = _("Reminder: your availability survey is still unanswered")
+    title = _("Reminder about an unanswered availability survey")
+
+    @classmethod
+    def get_subject(cls, notification):
+        response = cls.response(notification)
+        if response is None:
+            return str(cls.title)
+        return _("Reminder: your availability for {period} is still missing").format(
+            period=period_label(response.period)
+        )
+
+    @classmethod
+    def opening(cls, response):
+        return _(
+            "we are still missing your availability for the services from {period}. "
+            "The survey is open until {deadline}."
+        ).format(
+            period=period_label(response.period),
+            deadline=local_time(response.period.deadline, response.period),
+        )
 
     @classmethod
     def is_obsolete(cls, notification):
@@ -79,17 +161,11 @@ class SurveyReminder(SurveyInvitation):
 
 class PlanPublished(AbstractNotificationHandler):
     slug = "shift_coordination_published"
-    title = _("Your published service plan")
-
-    @classmethod
-    def get_subject(cls, notification):
-        return cls.title
+    title = _("Your shifts in a published service plan")
 
     @classmethod
     def entries(cls, notification):
-        from ephios.core.models import AbstractParticipation, LocalParticipation, Shift
-
-        from .models import PlanningPeriod
+        from ephios.core.models import AbstractParticipation, Shift, UserProfile
 
         period = PlanningPeriod.objects.filter(
             pk=notification.data["period_id"], state=PlanningPeriod.State.PUBLISHED
@@ -106,87 +182,232 @@ class PlanPublished(AbstractNotificationHandler):
             .select_related("event")
             .in_bulk()
         )
+        people = {m["user_id"] for record in records for m in record["members"]}
+        names = {user.pk: str(user) for user in UserProfile.objects.filter(pk__in=people)}
+        viewable = dict(
+            AbstractParticipation.objects.filter(
+                pk__in=[m["participation_id"] for record in records for m in record["members"]]
+            )
+            .viewable_by(notification.user.as_participant())
+            .values_list("pk", "localparticipation__user_id")
+        )
         entries = []
         for record in records:
             shift = shifts.get(record["native_id"])
             if not shift or not notification.user.has_perm("core.view_event", shift.event):
                 continue
-            partners = LocalParticipation.objects.filter(
-                pk__in=AbstractParticipation.objects.filter(
-                    pk__in=[m["participation_id"] for m in record["members"]]
-                )
-                .viewable_by(notification.user.as_participant())
-                .values_list("pk", flat=True)
-            ).select_related("user")
-            expected = {(m["participation_id"], m["user_id"]) for m in record["members"]}
+            partners = []
+            for member in record["members"]:
+                expected = None if member.get("observer") else member["user_id"]
+                if (
+                    member["user_id"] == notification.user_id
+                    or viewable.get(member["participation_id"], False) != expected
+                    or member["user_id"] not in names
+                ):
+                    continue
+                partners.append(names[member["user_id"]])
             entries.append(
                 {
                     "record": record,
                     "url": shift.get_absolute_url(),
-                    "partners": [
-                        str(p.user)
-                        for p in partners
-                        if (p.pk, p.user_id) in expected and p.user_id != notification.user_id
-                    ],
+                    "partners": partners,
+                    "observer": any(
+                        m["user_id"] == notification.user_id and m.get("observer")
+                        for m in record["members"]
+                    ),
                 }
             )
         return period, entries
 
     @classmethod
-    def get_body(cls, notification):
-        from datetime import datetime
+    def get_subject(cls, notification):
+        period = PlanningPeriod.objects.filter(pk=notification.data["period_id"]).first()
+        if period is None:
+            return str(cls.title)
+        return _("Service plan for {period} published").format(period=period_label(period))
 
+    @classmethod
+    def get_body(cls, notification):
         period, entries = cls.entries(notification)
         if not period:
             return ""
-        zone = ZoneInfo(period.timezone)
         lines = [
-            _(
-                "Your service plan was published on {published}. This message records that "
-                "published plan. Check ephios for current assignments."
-            ).format(
-                published=date_format(
-                    timezone.localtime(period.published_at, zone), "DATETIME_FORMAT"
-                )
-            )
+            _("Hello {name},").format(name=notification.user.get_full_name()),
+            "",
+            _("the service plan for {period} has just been published. Your shifts:").format(
+                period=period_label(period),
+            ),
+            "",
         ]
         for entry in entries:
-            record = entry["record"]
-            lines.append(
-                "{label}: {start} – {end}".format(
-                    label=record["label"],
-                    start=date_format(
-                        timezone.localtime(datetime.fromisoformat(record["start_time"]), zone),
-                        "DATETIME_FORMAT",
-                    ),
-                    end=date_format(
-                        timezone.localtime(datetime.fromisoformat(record["end_time"]), zone),
-                        "DATETIME_FORMAT",
-                    ),
-                )
-            )
+            details = [f"[{shift_label(period, entry['record'])}]({make_absolute(entry['url'])})"]
+            if entry["observer"]:
+                details.append(str(_("sitting in, no working hours")))
             if entry["partners"]:
-                lines.append(
-                    _("Partners in the published plan: {names}").format(
-                        names=", ".join(entry["partners"])
-                    )
-                )
-        return "\n".join(lines)
+                details.append(str(_("with {names}").format(names=", ".join(entry["partners"]))))
+            lines.append("- " + " · ".join(details))
+        calendar = make_absolute(reverse("core:settings_calendar"))
+        lines += [
+            "",
+            _(
+                "Every shift links to its service. They are also in your personal "
+                "[ephios calendar]({calendar})."
+            ).format(calendar=calendar),
+            _(
+                "If you cannot make it, please sign off in ephios as early as you can so that "
+                "we can find a replacement."
+            ),
+            _("This message records the published plan; ephios always shows the current one."),
+        ]
+        return text(lines)
 
     @classmethod
     def get_actions(cls, notification):
-        _period, entries = cls.entries(notification)
-        if not entries:
-            return []
-        return [(entry["record"]["label"], make_absolute(entry["url"])) for entry in entries] + [
-            (
-                str(_("Open your calendar settings")),
-                make_absolute(reverse("core:settings_calendar")),
-            )
-        ]
+        return []
 
     @classmethod
     def is_obsolete(cls, notification):
         from .access import enabled
 
         return not enabled() or not cls.entries(notification)[1]
+
+
+class ShiftStaffingHandler(AbstractNotificationHandler):
+    @classmethod
+    def planned_shift(cls, notification):
+        return (
+            PlannedShift.objects.filter(pk=notification.data["planned_shift_id"])
+            .select_related("shift__event", "event__period")
+            .first()
+        )
+
+    @classmethod
+    def describe(cls, planned):
+        period = planned.event.period
+        return "{title}: {shift}".format(
+            title=period.template_snapshot["title"],
+            shift=shift_label(period, planned.snapshot),
+        )
+
+    @classmethod
+    def get_actions(cls, notification):
+        planned = cls.planned_shift(notification)
+        if planned is None or planned.shift is None:
+            return []
+        return [
+            (
+                str(_("Open the service")),
+                make_absolute(planned.shift.event.get_absolute_url()),
+            ),
+            (
+                str(_("Open the replacement overview")),
+                make_absolute(
+                    reverse("ephios_shift_coordination:replacement", args=[planned.event_id])
+                ),
+            ),
+        ]
+
+
+class ShiftUnderstaffed(ShiftStaffingHandler):
+    slug = "shift_coordination_understaffed"
+    title = _("A staffed shift of your service plan lost a person")
+
+    @classmethod
+    def get_subject(cls, notification):
+        planned = cls.planned_shift(notification)
+        if planned is None:
+            return str(cls.title)
+        return _("Shift no longer staffed: {shift}").format(shift=cls.describe(planned))
+
+    @classmethod
+    def get_body(cls, notification):
+        from .staffing import staffing
+
+        planned = cls.planned_shift(notification)
+        if planned is None or planned.shift is None:
+            return ""
+        state = staffing(planned)
+        return text(
+            [
+                _("{person} signed off from {shift}.").format(
+                    person=notification.data.get("person", ""), shift=cls.describe(planned)
+                ),
+                "",
+                _("The shift now has {count} of at least {minimum} people.").format(
+                    count=state["count"], minimum=state["minimum"]
+                ),
+                "",
+                _(
+                    "The replacement overview shows who answered that they are available that day "
+                    "and who could take the shift."
+                ),
+            ]
+        )
+
+    @classmethod
+    def is_obsolete(cls, notification):
+        from .staffing import staffing
+
+        planned = cls.planned_shift(notification)
+        return planned is None or planned.shift is None or staffing(planned)["sufficient"]
+
+
+class StaffingChanged(ShiftStaffingHandler):
+    slug = "shift_coordination_staffing"
+    title = _("A coordinator changed your staffing")
+
+    @classmethod
+    def get_subject(cls, notification):
+        planned = cls.planned_shift(notification)
+        if planned is None:
+            return str(cls.title)
+        if notification.data["change"] == "assigned":
+            return _("You are staffed for {shift}").format(shift=cls.describe(planned))
+        return _("You are no longer staffed for {shift}").format(shift=cls.describe(planned))
+
+    @classmethod
+    def get_body(cls, notification):
+        planned = cls.planned_shift(notification)
+        if planned is None or planned.shift is None:
+            return ""
+        actor = notification.data.get("actor", "")
+        if notification.data["change"] == "assigned":
+            lines = [
+                _("{actor} staffed you for {shift}.").format(
+                    actor=actor, shift=cls.describe(planned)
+                )
+            ]
+            if notification.data.get("observer"):
+                lines.append(
+                    _(
+                        "You are sitting in: no qualification is required and the time is not "
+                        "counted as working hours."
+                    )
+                )
+            lines += [
+                "",
+                _("If that does not work for you, please sign off in ephios as early as you can."),
+            ]
+            return text(lines)
+        return text(
+            [
+                _("{actor} removed you from {shift}.").format(
+                    actor=actor, shift=cls.describe(planned)
+                ),
+                "",
+                _("You do not have to do anything. Your other shifts are unchanged."),
+            ]
+        )
+
+    @classmethod
+    def is_obsolete(cls, notification):
+        from .staffing import staffing
+
+        planned = cls.planned_shift(notification)
+        if planned is None or planned.shift is None:
+            return True
+        staffed = any(
+            row["user"] and row["user"].pk == notification.user_id
+            for row in staffing(planned)["rows"]
+        )
+        return staffed != (notification.data["change"] == "assigned")

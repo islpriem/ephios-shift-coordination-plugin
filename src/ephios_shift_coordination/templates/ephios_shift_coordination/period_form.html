@@ -1,56 +1,140 @@
 {% extends "base.html" %}
 {% load crispy_forms_filters i18n static %}
 {% block title %}
-    {% translate "Create period" %}
+    {% translate "New planning period" %}
 {% endblock %}
 {% block content %}
     <link rel="stylesheet"
           href="{% static 'ephios_shift_coordination/planning.css' %}">
-    <h1>{% translate "Create period" %}</h1>
-    <form method="post">
+    <h1 class="mb-1">{% translate "New planning period" %}</h1>
+    <p class="text-body-secondary">
+        {% translate "Choose a service template and a date range, adjust single dates and create the services in ephios." %}
+    </p>
+    <form method="post"
+          id="sc-period-form"
+          data-stale="{% translate 'Template, range or weekdays changed. Suggest the dates again.' %}"
+          data-create="{% translate 'Create services' %}">
         {% csrf_token %}
-        {{ form|crispy }}
-        <button class="btn btn-secondary"
-                name="action"
-                value="calendar"
-                type="submit">{% translate "Calculate date selection" %}</button>
+        {{ form.non_field_errors }}
+        {{ form.creation_key }}
+        <section class="sc-card">
+            <h2 class="sc-card-title">
+                <span class="sc-step-number">1</span> {% translate "Template and date range" %}
+            </h2>
+            <div class="sc-card-body" data-sc-basics>
+                {{ form.template|as_crispy_field }}
+                <div class="row">
+                    <div class="col-md-6">{{ form.start_date|as_crispy_field }}</div>
+                    <div class="col-md-6">{{ form.end_date|as_crispy_field }}</div>
+                </div>
+                <fieldset class="mb-3">
+                    <legend class="form-label mb-1">{{ form.weekdays.label }}</legend>
+                    <div class="sc-pills">
+                        {% for checkbox in form.weekdays %}
+                            <span class="sc-pill">
+                                {{ checkbox.tag }}
+                                <label for="{{ checkbox.id_for_label }}">{{ checkbox.choice_label }}</label>
+                            </span>
+                        {% endfor %}
+                    </div>
+                    <div class="form-text">{{ form.weekdays.help_text }}</div>
+                    {{ form.weekdays.errors }}
+                </fieldset>
+                {{ form.exclude_holidays|as_crispy_field }}
+                <details class="sc-details">
+                    <summary>{% translate "Rules for this period" %}</summary>
+                    <div class="sc-details-body">
+                        <p class="text-body-secondary small">
+                            {% translate "Preset from the planning settings. Changes here apply to this period only." %}
+                        </p>
+                        <div class="row">
+                            <div class="col-md-6">{{ form.weekly_limit|as_crispy_field }}</div>
+                            <div class="col-md-6">{{ form.response_days|as_crispy_field }}</div>
+                        </div>
+                        {{ form.reminder_days|as_crispy_field }}
+                        {{ form.free_next_day|as_crispy_field }}
+                        {{ form.allow_observers|as_crispy_field }}
+                    </div>
+                </details>
+                <button class="btn btn-outline-primary"
+                        name="action"
+                        value="calendar"
+                        type="submit">
+                    <i class="far fa-calendar-alt"
+                       aria-hidden="true"></i> {% translate "Suggest dates" %}
+                </button>
+            </div>
+        </section>
         {% if days %}
             <input type="hidden" name="selection_ready" value="1">
-            <h2 class="mt-4">{% translate "Selected dates" %}</h2>
-            <p>{% translate "Select or deselect individual dates, including holidays. Recalculating replaces this selection." %}</p>
-            <div class="planning-calendar">
-                {% for day in days %}
-                    {% ifchanged day.date.month %}<h3 class="planning-month">{{ day.date|date:"F Y" }}</h3>{% endifchanged %}
-                    <label class="planning-day planning-column-{{ day.column }}">
-                        <input type="checkbox"
-                               name="dates"
-                               value="{{ day.date|date:'Y-m-d' }}"
-                               {% if day.selected %}checked{% endif %}>
-                        {{ day.date|date:"D, j." }}
-                        {% if day.holiday %}<small class="d-block">{{ day.holiday }}</small>{% endif %}
-                    </label>
-                {% endfor %}
-            </div>
-            <button class="btn btn-secondary mt-3"
-                    name="action"
-                    value="preview"
-                    type="submit">{% translate "Update preview" %}</button>
-            {% if preview %}
-                <h2 class="mt-3">{% translate "Preview" %}</h2>
-                <p>{% translate "Creating the period makes these events visible in ephios. Self-signup stays disabled." %}</p>
-                {% for day in preview %}
-                    <h3>{{ day.date }}</h3>
-                    <ul>
-                        {% for shift in day.shifts %}
-                            <li>{{ shift.label }}: {{ shift.start_time }} – {{ shift.end_time }} ({% translate "Minimum staffing" %}: {{ shift.structure_configuration.minimum_number_of_participants }})</li>
+            <section class="sc-card">
+                <h2 class="sc-card-title">
+                    <span class="sc-step-number">2</span> {% translate "Choose the dates" %}
+                </h2>
+                <div class="sc-card-body">
+                    <p class="text-body-secondary">
+                        {% translate "Tick or untick single days, including holidays. Suggesting dates again replaces this selection." %}
+                    </p>
+                    <p class="sc-selection-count" data-sc-count aria-live="polite"></p>
+                    <div class="sc-calendar">
+                        {% for day in days %}
+                            {% ifchanged day.date.month %}
+                                <h3 class="sc-month">{{ day.date|date:"F Y" }}</h3>
+                                {% for value, label in form.weekdays.field.choices %}
+                                    <span class="sc-weekday-head planning-column-{{ forloop.counter }}"
+                                          aria-hidden="true">{{ label|slice:":2" }}</span>
+                                {% endfor %}
+                            {% endifchanged %}
+                            <label class="sc-day planning-column-{{ day.column }}">
+                                <input type="checkbox"
+                                       name="dates"
+                                       value="{{ day.date|date:'Y-m-d' }}"
+                                       {% if day.selected %}checked{% endif %}>
+                                <span class="sc-day-number">{{ day.date|date:"j" }}</span>
+                                <span class="sc-day-weekday">{{ day.date|date:"D" }}</span>
+                                {% if day.holiday %}<small class="sc-holiday">{{ day.holiday }}</small>{% endif %}
+                            </label>
+                        {% endfor %}
+                    </div>
+                </div>
+            </section>
+            <section class="sc-card">
+                <h2 class="sc-card-title">
+                    <span class="sc-step-number">3</span> {% translate "Check and create" %}
+                </h2>
+                <div class="sc-card-body">
+                    <p>{% translate "Every selected date becomes one event with these shifts:" %}</p>
+                    <ul class="sc-shift-summary">
+                        {% for shift in shifts %}
+                            <li>
+                                <span class="fw-semibold">{{ shift.label }}</span>
+                                {{ shift.start_time|time:"H:i" }}–{{ shift.end_time|time:"H:i" }}
+                                <span class="text-body-secondary">
+                                    · {% translate "meeting" %} {{ shift.meeting_time|time:"H:i" }}
+                                    · {% blocktranslate with minimum=shift.structure_configuration.minimum_number_of_participants %}at least {{ minimum }} people{% endblocktranslate %}
+                                    {% if shift.structure_configuration.maximum_number_of_participants %}
+                                        {% blocktranslate with maximum=shift.structure_configuration.maximum_number_of_participants %}, at most {{ maximum }}{% endblocktranslate %}
+                                    {% endif %}
+                                </span>
+                            </li>
                         {% endfor %}
                     </ul>
-                {% endfor %}
-                <button class="btn btn-primary"
-                        name="action"
-                        value="create"
-                        type="submit">{% translate "Create events" %}</button>
-            {% endif %}
+                    <p class="text-body-secondary">
+                        {% translate "The services become visible in ephios right away. Self-signup stays disabled: members answer the survey, coordinators plan the shifts." %}
+                    </p>
+                    <button class="btn btn-primary"
+                            name="action"
+                            value="create"
+                            type="submit"
+                            data-sc-create
+                            data-sc-busy="{% translate 'The services are being created. Please keep this window open.' %}">
+                        <i class="fas fa-calendar-plus" aria-hidden="true"></i>
+                        <span data-sc-create-label>{% translate "Create services" %}</span>
+                    </button>
+                </div>
+            </section>
         {% endif %}
     </form>
+    <script type="module"
+            src="{% static 'ephios_shift_coordination/period-form.js' %}"></script>
 {% endblock %}

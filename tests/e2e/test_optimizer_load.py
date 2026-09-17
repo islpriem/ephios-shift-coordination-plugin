@@ -22,15 +22,14 @@ def test_native_load_http_budget_queries_and_responsive_preview():
             service_workers="block", locale="de-DE", viewport={"width": 1600, "height": 1000}
         )
         try:
-            login(page, "demo-001@example.invalid", "demo-only-member-password")
+            login(page, "demo-001@example.invalid", "demo")
             for scarce in (False, True):
                 report = json.loads(
                     in_test_app(fixture_code + f"\nload_fixture({period_id!r}, scarce={scarce!r})")
                 )
                 period_id = report["period"]
                 page.goto(f"{base}/shift-coordination/planning/{period_id}/plan/", timeout=60000)
-                month = page.locator("#planning-month")
-                expect(month.locator("option")).to_have_count(3)
+                expect(page.locator(".sc-day-box").first).to_be_visible()
                 started = monotonic()
                 with page.expect_response(
                     lambda response: response.url.endswith("/propose/"), timeout=60000
@@ -40,11 +39,11 @@ def test_native_load_http_budget_queries_and_responsive_preview():
                     expect(
                         page.get_by_role("button", name="Vorschlag berechnen", exact=True)
                     ).to_be_disabled()
-                    month.select_option("2034-03")
-                    expect(month).to_have_value("2034-03")
-                    expect(
-                        page.locator("#service-calendar input[data-person]").first
-                    ).to_be_visible()
+                    page.locator("#people-filter").fill("Demoperson 007")
+                    expect(page.locator("#planning-people .sc-person:not([hidden])")).to_have_count(
+                        1
+                    )
+                    page.locator("#people-filter").fill("")
                 report["http_seconds"] = monotonic() - started
                 result = pending.value.json()
                 report["result"] = result
@@ -60,7 +59,7 @@ def test_native_load_http_budget_queries_and_responsive_preview():
                 assert result["score"]["filled"] > 0
                 expect(page.locator("input[data-person]:checked")).to_have_count(0)
                 expect(
-                    page.get_by_role("button", name="Vorschlag übernehmen", exact=True)
+                    page.get_by_role("button", name="Diesen Vorschlag übernehmen", exact=True)
                 ).to_be_enabled()
                 page.screenshot(path=f".local/test-results/planning-load-{report['case']}.png")
             assert (

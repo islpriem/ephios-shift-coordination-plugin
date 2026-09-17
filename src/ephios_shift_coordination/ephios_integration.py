@@ -4,11 +4,17 @@ from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from ephios.core.dynamic_preferences_registry import GeneralRequiredQualificationPreference
-from ephios.core.models import Qualification
+from ephios.core.models import Event, Qualification
 from ephios.core.services.qualification import collect_all_included_qualifications
+from guardian.shortcuts import get_objects_for_user
 
 from .models import PlannedShift
 from .services import Conflict
+
+
+def observer_name(name):
+    """Native display name of a member sitting in without working hours."""
+    return _("{name} · sitting in").format(name=name)
 
 
 def type_requirements(event_type):
@@ -33,6 +39,56 @@ def eligible(user, planned_shift):
         Qualification.objects.filter(pk__in=valid_ids)
     )
     return required <= set(qualifications.values_list("pk", flat=True))
+
+
+def eligibility(users, planned_shifts):
+    """Apply the rules of `eligible` to a whole cohort with few queries.
+
+    Returns the visible native event IDs and the eligible planned shifts per user ID.
+    """
+    now = timezone.now()
+    targets = Event.objects.filter(
+        pk__in={planned.shift.event_id for planned in planned_shifts if planned.shift}
+    )
+    requirements, included, result = {}, {}, {}
+    for user in users:
+        visible = (
+            set(
+                get_objects_for_user(user, "core.view_event", klass=targets).values_list(
+                    "pk", flat=True
+                )
+            )
+            if user.is_active
+            else set()
+        )
+        grants = list(user.qualification_grants.all())
+        offered = []
+        for planned in planned_shifts:
+            shift = planned.shift
+            if not shift or not shift.event.active or shift.event_id not in visible:
+                continue
+            if shift.event.type_id not in requirements:
+                requirements[shift.event.type_id] = set(type_requirements(shift.event.type))
+            required = requirements[shift.event.type_id] | set(
+                shift.structure_configuration.get("required_qualification_ids", [])
+            )
+            valid = tuple(
+                sorted(
+                    grant.qualification_id
+                    for grant in grants
+                    if grant.expires is None or grant.expires >= max(now, shift.end_time)
+                )
+            )
+            if valid not in included:
+                included[valid] = set(
+                    collect_all_included_qualifications(
+                        Qualification.objects.filter(pk__in=valid)
+                    ).values_list("pk", flat=True)
+                )
+            if required <= included[valid]:
+                offered.append(planned)
+        result[user.pk] = (visible, offered)
+    return result
 
 
 def period_shifts(period):

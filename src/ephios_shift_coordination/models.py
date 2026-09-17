@@ -37,6 +37,12 @@ class PlanningSettings(models.Model):
     solver_seconds = models.PositiveSmallIntegerField(
         _("Calculation budget in seconds"), default=10, validators=[MinValueValidator(1)]
     )
+    allow_observers = models.BooleanField(_("Allow observers"), default=False)
+    minimum_regular = models.PositiveSmallIntegerField(
+        _("Regular people per shift with observers"),
+        default=1,
+        validators=[MinValueValidator(1)],
+    )
 
     class Meta:
         constraints = [
@@ -166,6 +172,8 @@ class PlanningPeriod(models.Model):
     opened_at = models.DateTimeField(null=True)
     deadline = models.DateTimeField(null=True)
     opened_structure = models.JSONField(default=dict)
+    # Recommended personal maximum and the capacity estimate it is based on.
+    suggestion = models.JSONField(default=dict)
     creation_key = models.UUIDField(default=uuid.uuid4, unique=True)
     request_digest = models.CharField(max_length=64)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, models.SET_NULL, null=True)
@@ -221,6 +229,9 @@ class SurveyResponse(models.Model):
     period = models.ForeignKey(PlanningPeriod, models.CASCADE, related_name="responses")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, models.CASCADE)
     offered_shifts = models.ManyToManyField(PlannedShift)
+    observer_events = models.ManyToManyField(
+        PlannedEvent, blank=True, related_name="observer_responses"
+    )
     maximum = models.PositiveIntegerField(_("Personal maximum"), null=True)
     notes = models.TextField(_("Notes"), max_length=4000, blank=True)
     submitted_at = models.DateTimeField(null=True)
@@ -238,10 +249,10 @@ class SurveyResponse(models.Model):
 
 class Availability(models.Model):
     class Rating(models.TextChoices):
-        UNAVAILABLE = "unavailable", _("Unavailable (red)")
-        IF_NEEDED = "if_needed", _("If needed (yellow)")
-        AVAILABLE = "available", _("Available (green)")
-        PREFERRED = "preferred", _("Especially preferred (star)")
+        UNAVAILABLE = "unavailable", _("Unavailable")
+        IF_NEEDED = "if_needed", _("If needed")
+        AVAILABLE = "available", _("Available")
+        PREFERRED = "preferred", _("Preferred")
 
     response = models.ForeignKey(SurveyResponse, models.CASCADE, related_name="availabilities")
     planned_shift = models.ForeignKey(PlannedShift, models.CASCADE)
@@ -282,11 +293,29 @@ class DraftAssignment(models.Model):
     planned_shift = models.ForeignKey(PlannedShift, models.CASCADE)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, models.SET_NULL, null=True)
     original_user_id = models.PositiveIntegerField()
+    observer = models.BooleanField(default=False)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
                 fields=["planned_shift", "original_user_id"], name="planning_unique_assignment"
+            )
+        ]
+
+
+class ObserverParticipation(models.Model):
+    """Native placeholder of a member sitting in: counted as staff, without working hours."""
+
+    participation = models.OneToOneField(
+        "core.PlaceholderParticipation", models.CASCADE, related_name="planning_observer"
+    )
+    planned_shift = models.ForeignKey(PlannedShift, models.CASCADE, related_name="observers")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, models.CASCADE, related_name="+")
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["planned_shift", "user"], name="planning_unique_observer"
             )
         ]
 

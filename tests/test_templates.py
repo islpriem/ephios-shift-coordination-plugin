@@ -67,3 +67,14 @@ def test_invalid_planning_rules_are_rejected(changes):
     instance = PlanningSettings(**changes)
     with pytest.raises(ValidationError):
         instance.clean()
+
+
+def test_every_plugin_string_has_a_reviewed_german_translation():
+    import re
+    from pathlib import Path
+
+    catalog = Path("src/ephios_shift_coordination/locale/de/LC_MESSAGES/django.po").read_text()
+    entries = re.findall(r'msgid (".*?")\nmsgstr (".*?")\n', catalog, re.S)
+    assert [msgid for msgid, msgstr in entries if msgstr == '""' and msgid != '""'] == []
+    # Fuzzy entries are guesses that Django would not use, obsolete ones are dead weight.
+    assert "#, fuzzy" not in catalog and "#~" not in catalog

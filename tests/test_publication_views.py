@@ -40,7 +40,7 @@ def test_review_confirmation_publication_record_and_native_logging(client, draft
     assert response.status_code == 302 and response.url == urls["publication"]
     record = client.get(response.url)
     assert record.status_code == 200
-    assert "Published plan" in record.content.decode()
+    assert "Published service plan" in record.content.decode()
     assert b'name="confirm_publish"' not in record.content
     participation = LocalParticipation.objects.get()
     assert LogEntry.objects.filter(

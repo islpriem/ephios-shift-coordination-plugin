@@ -5,6 +5,9 @@ An ephios plugin for availability surveys and recurring service planning.
 The plugin targets ephios 0.27.0 and Python 3.14. Planning permissions, settings,
 service templates, recurring event creation, availability surveys, shared planning
 drafts, automatic proposals and publication through native participations are implemented.
+Members can offer to sit in on a service without taking a shift, coordinators can close
+a survey early, and after publication everybody staffed can sign off or step in through
+the replacement overview.
 It is based on the [official plugin template](https://github.com/ephios-dev/ephios-plugin-template).
 
 ## Development
@@ -40,7 +43,10 @@ plus fixed-seed loads of 100 people and about 200 shifts over three months. Sepa
 realistic and scarce cases record model/stage timings and validated results. Browser
 load reports also record the full HTTP time, snapshot query count and database/runtime
 versions. Pure calculations run under a subprocess watchdog; HTTP tests have an outer
-timeout and exercise the calendar during calculation.
+timeout and exercise the calendar during calculation. Allowing people to sit in makes the
+model larger, because every service a candidate could serve offers its other shifts as well;
+those columns carry no capacity and no neighbouring-day row of their own, so the load case
+stays inside its budget.
 
 ## Local stack
 
@@ -70,44 +76,76 @@ make dev-import-demo
 This starts the development stack, imports synthetic data and then runs the
 native ephios administrator creation prompt. Enter the administrator's email,
 display name, date of birth and password there. Password input is hidden and is
-not passed in command arguments. Importing does not send invitations or mail.
+not passed in command arguments.
 
 The dataset contains:
 
-- 100 members, `demo-001@example.invalid` through `demo-100@example.invalid`,
-  with the initial password `demo-only-member-password`.
-- Planning permissions for the first two members; the other 98 are ordinary
-  members. Demo qualifications are split between both shifts, with 20 people
-  qualified for both.
+- 30 members, `demo-001@example.invalid` through `demo-030@example.invalid`,
+  with the initial password `demo`.
+- Planning permissions for the first two members; the others are ordinary
+  members. Demo qualifications are split between both shifts, with every fifth
+  person qualified for both.
 - A `Dienst` event type and service template with `Schicht 1` (09:00–13:00) and
   `Schicht 2` (13:00–17:00), meeting 15 minutes earlier, minimum two and maximum
   three people each. Each shift requires its corresponding demo qualification.
+- Four fortnightly planning periods with seven services each, one per state you
+  may want to try: a finished published one in the past, a published one that is
+  about to start, one whose survey is closed and that is waiting to be planned
+  (its last two services deliberately lack people), and one whose survey is still
+  running with about half of the answers in. Answers cover the whole rating
+  scale, some people offer to sit in and some leave a note.
 
-Repeating the import reuses existing members and the `Dienst` template. It does
-not reset existing passwords or overwrite template settings. No events or survey
-responses are generated. Holiday exclusion stays disabled until a region is
-configured. These example values are only created by this explicit demo command.
+Repeating the import reuses existing members, the `Dienst` template and the
+existing periods. It does not reset passwords, overwrite template settings or
+create a second set of periods. Holiday exclusion stays disabled until a region
+is configured. These example values are only created by this explicit demo command.
 
-For an unattended import without the administrator prompt:
+For an unattended import without the administrator prompt, and to start from an
+empty database:
 
 ```sh
 scripts/run uv run --locked python scripts/project.py import-demo --no-admin
+scripts/run uv run --locked python scripts/project.py import-demo --reset
 ```
 
-Log in at <http://127.0.0.1:8097>. Administrators manage planning groups, defaults
-and service templates through ephios settings. Coordinators use **Dienstplanung**
-to select a template and period, calculate the initial dates, adjust individual
-days, inspect the preview and create native events. Events are immediately
-visible according to their permissions and self-signup is disabled. The creator
-is also made responsible, in addition to the template's configured responsibles.
+`--reset` deletes the development stack's database, uploads and captured mail
+under `.local/data/development/` before importing. It never touches another stack.
 
-On the period page, save the response deadline and reminder offsets, then open the
-survey to invite eligible members. The deadline must precede the first shift.
-Members use **Umfragen** to rate every offered shift, set a personal maximum
-(including zero), and optionally add private notes. They can replace the complete
-response until the deadline; afterwards their response remains readable.
-Coordinators can inspect responses on the period page. Qualification changes are
-shown without changing the original questions or saved ratings.
+Log in at <http://127.0.0.1:8097>. Administrators manage planning groups, defaults
+and service templates through ephios settings. The holiday region, the calculation
+budget and the number of regular people a shift needs besides anybody sitting in are
+instance-wide settings; periods only carry the values that differ per period.
+
+Coordinators use **Dienstplanung** and create a period in three steps: template and
+date range, the single dates in the calendar, then a summary of the services that will
+be created. Events are immediately visible according to their permissions and
+self-signup is disabled. The creator is also made responsible, in addition to the
+template's configured responsibles.
+
+On the period page, set the response deadline, the reminder offsets and the recommended
+number of shifts per person, then open the survey. The recommendation is calculated from
+the shifts, their minimum staffing and the qualifications of the invited members: it is
+the smallest number of shifts per person that still allows every shift to be staffed.
+Members see that number as the default for their personal maximum together with a short
+explanation. The deadline must precede the first shift.
+
+Members use **Umfragen** and answer in one compact table: one row per service, one column
+group per shift they may take, four colored choices per shift and, where the period allows
+it, one checkbox to offer sitting in. They set a personal maximum (including zero) and can
+add a private note. They can replace the complete response until the deadline; afterwards
+it remains readable. Coordinators see the answers on the period page; qualification changes
+are shown without changing the original questions or saved ratings.
+
+Sitting in means joining a service without taking a shift: no qualification is required,
+the time earns no working hours, and the person still counts towards the staffing of the
+shift. Every shift keeps at least the configured number of regularly staffed people, so a
+shift is never staffed by people sitting in alone. When a period allows it, everybody who
+can see the services is invited to the survey, even without a matching qualification.
+
+Whoever already serves a shift that day may sit in on the other shifts of the same service
+without offering it separately: they are on site anyway, so it needs no extra offer and does
+not use up another of their services. Only sitting in on a day somebody would otherwise stay
+at home counts against their personal maximum and needs their offer.
 
 Invitations and reminders use ephios notification preferences and its normal
 `run_periodic` command. Only unanswered surveys receive reminders; repeated runs
@@ -115,24 +153,37 @@ do not create duplicate dispatches. After an outage, only the newest due reminde
 is created. The server locks answers at the deadline even if the periodic command
 has not yet run. Opening a survey does not create shift participations.
 
-After the deadline, coordinators use **Dienste planen** to select people in the monthly
-calendar. Counts update immediately; the server checks the current qualifications,
-responses, personal and weekly limits, consecutive days, overlaps and shift capacity.
-Only confirmed services of the same event type affect these checks. Notes are visible
-to coordinators and are never passed to the independent scheduling module.
+Coordinators use **Dienste planen** to select people in a calendar that shows the whole
+period at once and only the weekdays that actually carry shifts. Each shift card lists the
+people already selected and hides the remaining candidates behind one click. Counts update
+immediately; the server checks the current qualifications, responses, personal and weekly
+limits, consecutive days, overlaps and shift capacity. Only confirmed services of the same
+event type affect these checks. A speech-bubble icon marks everybody who wrote a note, both
+in the sidebar and on their assignments, and the counter above the calendar filters the
+sidebar down to them. Notes are visible to coordinators and are never passed to the
+independent scheduling module.
 
-Use **Person hinzufügen** for an explicit manual exception. Every current rule violation
-requires its own confirmation and reason before **Gemeinsamen Entwurf speichern**.
-Saving replaces the shared draft and records the exceptions without changing responses,
-creating native participations or sending email. Other coordinators see it after loading.
+Planning is possible while the survey is still running, which makes an interim result
+visible; new answers make a saved draft outdated, and publishing requires a closed survey.
+**Umfrage jetzt schließen** ends an open survey early after an explicit confirmation:
+answers become read-only and no further reminders are sent.
+
+A red exclamation mark marks every assignment that breaks a rule, with the reason in its
+tooltip; shift-wide problems such as a partly staffed shift sit in the shift's own header.
+One banner lists all of them as bullet points and is confirmed once, with an optional common
+note, before **Gemeinsamen Entwurf speichern**. A shift that has people but fewer than its
+minimum is such a rule violation: that service cannot take place, so either fill it or leave
+it empty. Saving replaces the shared draft and records every exception separately without
+changing responses, creating native participations or sending email. Other coordinators see it after loading.
 Stale versions or changed native inputs require reloading; deleted or inaccessible targets
 cannot be overridden. Recorded reasons remain available after subsequent draft edits.
 
 **Vorschlag berechnen** creates a complete alternative from current responses and native
-commitments. It first maximizes fully staffed shifts, then minimizes yellow assignments,
-then maximizes strong preferences. Each proposed shift has exactly its minimum staffing
+commitments. It first maximizes fully staffed shifts, then, where sitting in is possible,
+uses as few people sitting in as it can, then minimizes assignments marked "if needed" and
+finally maximizes strong preferences. Each proposed shift has exactly its minimum staffing
 or stays empty. A final bounded heuristic reduces repeated pairs without changing those
-three scores or breaking a rule. Existing draft selections and manual exceptions are
+scores or breaking a rule. Existing draft selections and manual exceptions are
 not optimizer inputs. The pure Python entry point is `optimizer.propose_plan(PlanningInput)`;
 its data contract contains IDs, times, limits and ratings, with no names or notes.
 
@@ -164,6 +215,21 @@ Each assigned person receives one summary through their ephios notification sett
 delivery starts after commit. Summaries respect current partner visibility and contain
 no survey notes or exception reasons. A delivery failure leaves the plan published and
 the notification available to ephios's existing delivery mechanism.
+
+After publication every service page links to **Besetzung und Nachbesetzung**. Coordinators
+and everybody staffed that day see who answered that they are available, whether that person
+could take the shift regularly or by sitting in, their answer on the four-step scale and what
+would speak against it, for example a service on the neighbouring day, a reached weekly limit
+or a reached personal maximum. Members sign off there or on the service page with **Ich bin
+verhindert**, take a free place with **Ich übernehme die Schicht** or offer **Ich sitze bei**.
+Coordinators can staff a candidate directly from the list, and the affected person is told.
+When signing off leaves a previously staffed shift below its minimum, every responsible
+coordinator gets a message that points to the replacement overview. The page is not visible
+to members who are neither staffed that day nor coordinating.
+
+People sitting in join as native placeholder participations: they count towards the staffing
+of the shift in ephios and receive the plugin's messages, but they earn no working hours and
+the shift does not appear in their personal ephios calendar.
 
 Members use their existing personal ICS URL in ephios calendar settings. The plugin
 creates no ICS files or separate feed: confirmed participations automatically appear

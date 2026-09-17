@@ -1,36 +1,258 @@
 {% extends "base.html" %}
-{% load i18n static %}
+{% load crispy_forms_filters i18n static %}
 {% block title %}
     {% translate "Your availability" %}
 {% endblock %}
 {% block content %}
     <link rel="stylesheet"
           href="{% static 'ephios_shift_coordination/planning.css' %}">
-    <h1>{% translate "Your availability" %}</h1>
-    <p>{{ response.period.start_date }} – {{ response.period.end_date }} · {{ response.period.effective_state_label }}</p>
-    <p>{% translate "Response deadline" %}: {{ response.period.deadline }}</p>
-    <p>{% translate "Preferences are not assignments. Only you and authorized coordinators can read your response." %}</p>
-    {% if response.period.state == "published" %}
-        <p>
-            {% translate "Planning is complete. Your current assignments are available in ephios." %}
-            <a href="{% url 'core:settings_calendar' %}">{% translate "Open your calendar settings" %}</a>
-        </p>
-    {% endif %}
-    {% if response.submitted_at %}
-        <p>{% translate "Response saved" %} · {{ response.updated_at }} · {% translate "Version" %} {{ response.version }}</p>
+    <nav class="small mb-2">
+        <a href="{% url 'ephios_shift_coordination:survey_list' %}">{% translate "Your availability surveys" %}</a>
+    </nav>
+    <div class="d-flex flex-wrap align-items-center gap-2">
+        <h1 class="mb-0">{% translate "Your availability" %}</h1>
+        {% include "ephios_shift_coordination/_period_status.html" with period=response.period %}
+    </div>
+    <p class="text-body-secondary">
+        {{ response.period.template_snapshot.title }} ·
+        {{ response.period.start_date|date:"DATE_FORMAT" }} – {{ response.period.end_date|date:"DATE_FORMAT" }}
+    </p>
+    {% if writable %}
+        <div class="alert alert-info" role="note">
+            <p class="mb-1">
+                <i class="far fa-clock" aria-hidden="true"></i>
+                {% blocktranslate with deadline=response.period.deadline|date:"DATETIME_FORMAT" %}Please answer by {{ deadline }}. You can change your answer until then.{% endblocktranslate %}
+            </p>
+            <p class="mb-0">
+                {% translate "Your answer is not an assignment: you are only scheduled once the plan is published. You will get a message with your shifts then." %}
+            </p>
+        </div>
     {% else %}
-        <p>{% translate "No complete response submitted yet." %}</p>
+        <div class="alert alert-secondary" role="note">
+            <i class="fas fa-lock" aria-hidden="true"></i>
+            {% translate "The survey is closed. Your answer stays readable, but cannot be changed any more." %}
+        </div>
     {% endif %}
-    {% if not writable %}
-        <p>{% translate "Your response is read-only." %}</p>
+    {% if services %}
+        <section class="sc-card">
+            <h2 class="sc-card-title">
+                <i class="fas fa-check-circle"
+                   aria-hidden="true"></i> {% translate "Your shifts in the published plan" %}
+            </h2>
+            <ul class="list-group list-group-flush">
+                {% for row in services %}
+                    <li class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2">
+                        <span>
+                            <a href="{{ row.planned.shift.event.get_absolute_url }}">{{ row.link.date|date:"D" }}, {{ row.link.date|date:"SHORT_DATE_FORMAT" }}</a>
+                            · {{ row.planned.snapshot.label }}
+                            {{ row.planned.shift.start_time|time:"H:i" }}–{{ row.planned.shift.end_time|time:"H:i" }}
+                            {% if row.state.mine.observer %}
+                                <span class="sc-chip sc-observer"><i class="fas fa-chair" aria-hidden="true"></i> {% translate "sitting in" %}</span>
+                            {% endif %}
+                        </span>
+                        <span class="d-flex flex-wrap gap-2">
+                            <a class="btn btn-sm btn-outline-secondary"
+                               href="{% url 'ephios_shift_coordination:replacement' row.link.pk %}">
+                                <i class="fas fa-people-arrows"
+                                   aria-hidden="true"></i> {% translate "Find a replacement" %}
+                            </a>
+                            {% if row.state.can_leave %}
+                                <form method="post"
+                                      action="{% url 'ephios_shift_coordination:staffing_action' row.planned.pk %}">
+                                    {% csrf_token %}
+                                    <input type="hidden"
+                                           name="user_id"
+                                           value="{{ request.user.pk }}">
+                                    <input type="hidden" name="action" value="leave">
+                                    <button class="btn btn-sm btn-outline-danger" type="submit">
+                                        <i class="fas fa-user-slash"
+                                           aria-hidden="true"></i> {% translate "I cannot make it" %}
+                                    </button>
+                                </form>
+                            {% endif %}
+                        </span>
+                    </li>
+                {% endfor %}
+            </ul>
+        </section>
     {% endif %}
-    <form method="post" class="survey-response">
+    <form method="post" class="sc-survey-form" id="sc-survey">
         {% csrf_token %}
-        {{ form.as_p }}
+        {{ form.non_field_errors }}
+        {{ form.expected_version }}
+        <section class="sc-card">
+            <h2 class="sc-card-title">
+                <i class="fas fa-hashtag"
+                   aria-hidden="true"></i> {% translate "How many shifts can you take?" %}
+            </h2>
+            <div class="sc-card-body">
+                <div class="row">
+                    <div class="col-sm-6 col-md-4">{{ form.maximum|as_crispy_field }}</div>
+                </div>
+                {% if recommendation %}
+                    <p class="text-body-secondary mb-0">
+                        <i class="fas fa-info-circle" aria-hidden="true"></i> {{ recommendation }}
+                    </p>
+                {% endif %}
+            </div>
+        </section>
+        <section class="sc-card">
+            <h2 class="sc-card-title">
+                <i class="far fa-calendar-check"
+                   aria-hidden="true"></i> {% translate "When are you available?" %}
+            </h2>
+            <div class="sc-card-body">
+                <ul class="sc-legend-list">
+                    {% for value, label in form.scale %}
+                        <li class="sc-chip sc-r-{{ value }}">
+                            {% include "ephios_shift_coordination/_rating_icon.html" with value=value %}
+                            {{ label }}
+                        </li>
+                    {% endfor %}
+                    {% if form.allow_observers %}
+                        <li class="sc-chip sc-observer">
+                            <i class="fas fa-chair"
+                               aria-hidden="true"></i> {% translate "I would like to sit in" %}
+                        </li>
+                    {% endif %}
+                </ul>
+                {% if form.allow_observers %}
+                    <p class="text-body-secondary small">
+                        {% translate "Sitting in means joining a service without taking a shift yourself: no qualification is required and the time is not counted as working hours." %}
+                    </p>
+                {% endif %}
+                <div class="table-responsive">
+                    <table class="table table-sm sc-survey-table">
+                        <thead>
+                            <tr>
+                                <th rowspan="2" scope="col">{% translate "Service" %}</th>
+                                {% for column in form.columns %}
+                                    <th colspan="4" scope="colgroup" class="text-center">
+                                        {{ column.label }}
+                                        <div class="fw-normal small text-body-secondary">{{ column.time }}</div>
+                                    </th>
+                                {% endfor %}
+                                {% if form.allow_observers %}
+                                    <th rowspan="2"
+                                        scope="col"
+                                        class="text-center sc-observer-head">
+                                        <i class="fas fa-chair" aria-hidden="true"></i>
+                                        <span class="d-block small fw-normal">{% translate "sit in" %}</span>
+                                    </th>
+                                {% endif %}
+                            </tr>
+                            <tr>
+                                {% for column in form.columns %}
+                                    {% for value, label in form.scale %}
+                                        <th scope="col"
+                                            class="sc-rate sc-r-{{ value }}{% if forloop.first %} sc-col-start{% endif %}"
+                                            data-bs-toggle="tooltip"
+                                            title="{{ column.label }}: {{ label }}">
+                                            {% include "ephios_shift_coordination/_rating_icon.html" with value=value %}
+                                            <span class="visually-hidden">{{ column.label }}: {{ label }}</span>
+                                        </th>
+                                    {% endfor %}
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in form.table %}
+                                <tr>
+                                    <th scope="row"
+                                        class="sc-day-cell">{{ row.date|date:"D, j.n." }}</th>
+                                    {% for cell in row.cells %}
+                                        {% if cell.field %}
+                                            {% for radio in cell.field %}
+                                                <td class="sc-rate sc-r-{{ radio.data.value }}{% if forloop.first %} sc-col-start{% endif %}"
+                                                    data-column="{{ cell.column }}">
+                                                    {{ radio.tag }}
+                                                    <label class="visually-hidden" for="{{ radio.id_for_label }}">{{ cell.field.label }}: {{ radio.choice_label }}</label>
+                                                    {% if forloop.first and cell.warning %}
+                                                        <i class="fas fa-exclamation-triangle"
+                                                           data-bs-toggle="tooltip"
+                                                           title="{{ cell.warning }}"></i>
+                                                        <span class="visually-hidden">{{ cell.warning }}</span>
+                                                    {% endif %}
+                                                </td>
+                                            {% endfor %}
+                                        {% else %}
+                                            <td colspan="4" class="sc-empty-cell">
+                                                <span data-bs-toggle="tooltip"
+                                                      title="{% translate 'Not offered to you on this date.' %}">—</span>
+                                            </td>
+                                        {% endif %}
+                                    {% endfor %}
+                                    {% if form.allow_observers %}
+                                        <td class="text-center">
+                                            {% if row.observe %}
+                                                <label class="visually-hidden"
+                                                       for="{{ row.observe.id_for_label }}">{{ row.observe.label }}</label>
+                                                {{ row.observe }}
+                                            {% endif %}
+                                        </td>
+                                    {% endif %}
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                        {% if writable and form.columns %}
+                            <tfoot class="sc-fill-row" hidden>
+                                <tr>
+                                    <th scope="row"
+                                        class="sc-day-cell">{% translate "All dates" %}</th>
+                                    {% for column in form.columns %}
+                                        {% for value, label in form.scale %}
+                                            <td class="sc-rate sc-r-{{ value }}">
+                                                <button type="button"
+                                                        class="sc-fill-button"
+                                                        data-column="{{ column.key }}"
+                                                        data-rating="{{ value }}"
+                                                        data-bs-toggle="tooltip"
+                                                        title="{{ column.label }}: {{ label }}">
+                                                    {% include "ephios_shift_coordination/_rating_icon.html" with value=value %}
+                                                    <span class="visually-hidden">{{ column.label }}: {{ label }}</span>
+                                                </button>
+                                            </td>
+                                        {% endfor %}
+                                    {% endfor %}
+                                    {% if form.allow_observers %}<td></td>{% endif %}
+                                </tr>
+                            </tfoot>
+                        {% endif %}
+                    </table>
+                </div>
+                <p class="text-body-secondary"
+                   aria-live="polite"
+                   data-sc-missing="{% translate 'Still open: {count} of the shifts above.' %}"
+                   data-sc-done="{% translate 'Thanks, every shift above has an answer.' %}"></p>
+            </div>
+        </section>
+        <section class="sc-card">
+            <h2 class="sc-card-title">
+                <i class="far fa-comment"
+                   aria-hidden="true"></i> {% translate "Anything we should know?" %}
+            </h2>
+            <div class="sc-card-body">{{ form.notes|as_crispy_field }}</div>
+        </section>
         {% if writable %}
-            <button class="btn btn-primary"
-                    type="submit">{% translate "Save complete response" %}</button>
+            <button class="btn btn-primary btn-lg"
+                    type="submit"
+                    data-sc-busy="{% translate 'Saving your answer…' %}">
+                <i class="fas fa-save" aria-hidden="true"></i> {% translate "Save answer" %}
+            </button>
         {% endif %}
     </form>
-    <p><a href="{% url 'ephios_shift_coordination:survey_list' %}">{% translate "All your surveys" %}</a></p>
+    {% if response.submitted_at %}
+        <p class="text-body-secondary small mt-2">
+            <i class="fas fa-check" aria-hidden="true"></i>
+            {% blocktranslate with updated=response.updated_at|date:"DATETIME_FORMAT" %}Answer saved on {{ updated }}.{% endblocktranslate %}
+        </p>
+    {% else %}
+        <p class="text-body-secondary small mt-2">{% translate "No complete answer saved yet." %}</p>
+    {% endif %}
+    <p class="text-body-secondary small">
+        <i class="fas fa-user-shield" aria-hidden="true"></i>
+        {% translate "Coordinators see your availability and your note. After publication, members staffed on the same day also see whether you are available that day, so they can find cover." %}
+    </p>
+    <script type="module"
+            src="{% static 'ephios_shift_coordination/survey.js' %}"></script>
 {% endblock %}

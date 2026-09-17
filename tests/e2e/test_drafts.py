@@ -52,7 +52,7 @@ print(json.dumps({'period': period.pk, 'shift': period.events.first().shifts.fir
         second = browser.new_page(service_workers="block", locale="de-DE")
         try:
             for page, index in ((first, 1), (second, 2)):
-                login(page, f"demo-{index:03d}@example.invalid", "demo-only-member-password")
+                login(page, f"demo-{index:03d}@example.invalid", "demo")
                 page.goto(url)
                 expect(
                     page.get_by_role("heading", name="Dienste planen", exact=False)
@@ -60,20 +60,23 @@ print(json.dumps({'period': period.pk, 'shift': period.events.first().shifts.fir
             uid, sid = setup["people"]["5"], setup["shift"]
             selector = f'input[data-person="{uid}"][data-shift="{sid}"]'
             count = first.locator(f'[data-person-count="{uid}"]')
+            for page in (first, second):
+                for card in page.locator(".sc-candidates > summary").all():
+                    card.click()
             first.locator(selector).focus()
             first.keyboard.press("Space")
-            expect(count).to_contain_text("Entwurf: 1")
+            expect(count).to_have_text("1/2")
             first.keyboard.press("Space")
-            expect(count).to_contain_text("Entwurf: 0")
+            expect(count).to_have_text("0/2")
             first.locator(selector).check()
             second.locator(selector).check()
             expect(
                 second.get_by_role("button", name="Gemeinsamen Entwurf speichern")
             ).to_be_enabled()
-            first.locator("#planning-month").select_option("2032-05")
-            expect(first.locator(selector)).to_have_count(0)
-            first.locator("#planning-month").select_option("2032-04")
+            # The whole period is on one page and only weekdays with shifts get a column.
+            expect(first.locator(".sc-day-box")).to_have_count(1)
             expect(first.locator(selector)).to_be_checked()
+            # A note exists, so the person is marked and the notes counter filters the list.
             person = first.locator("#planning-people details").filter(
                 has=first.locator(f'[data-person-count="{uid}"]')
             )
@@ -82,22 +85,29 @@ print(json.dumps({'period': period.pk, 'shift': period.events.first().shifts.fir
                 person.get_by_text("<script>window.compromised=true</script>", exact=True)
             ).to_be_visible()
             assert first.evaluate("window.compromised") is None
+            first.get_by_role("button", name="Hinweise", exact=False).click()
+            expect(first.locator("#planning-people .sc-person:not([hidden])")).to_have_count(2)
+            first.get_by_role("button", name="Hinweise", exact=False).click()
             card = first.locator(f'[data-shift-card="{sid}"]')
-            card.get_by_label("Person für eine manuelle Ausnahme hinzufügen").select_option(
-                str(setup["people"]["3"])
-            )
+            card.get_by_label(
+                "Person hinzufügen, die diese Schicht nicht angeboten hat"
+            ).select_option(str(setup["people"]["3"]))
             card.get_by_role("button", name="Person hinzufügen", exact=True).click()
-            expect(first.locator(".planning-exception")).to_have_count(2)
+            # One banner for every exception, and the rule violations are marked in place.
+            expect(first.locator(".sc-banner-list li")).to_have_count(2)
+            expect(first.locator(".sc-choice.sc-flagged")).to_have_count(1)
+            expect(first.locator("[data-shift-problem] .sc-problem")).to_have_count(0)
             expect(
                 first.get_by_role("button", name="Gemeinsamen Entwurf speichern")
             ).to_be_enabled()
-            for box in first.locator(".planning-exception").all():
-                box.get_by_label("Ich bestätige diese Ausnahme").check()
-                box.get_by_label("Begründung für diese Ausnahme", exact=True).fill(
-                    "Mit der Person abgesprochen"
-                )
+            first.get_by_label("Ich bestätige diese Ausnahmen", exact=False).check()
+            first.get_by_label("Gemeinsame Anmerkung für den Nachweis", exact=False).fill(
+                "Mit der Person abgesprochen"
+            )
             first.get_by_role("button", name="Gemeinsamen Entwurf speichern").click()
             expect(first.locator("#draft-status")).to_have_text("Gemeinsamer Entwurf gespeichert")
+            # The second page staffs the same two-person shift alone, which needs a confirmation.
+            second.get_by_label("Ich bestätige diese Ausnahmen", exact=False).check()
             with second.expect_response(lambda response: response.url.endswith("/draft/")) as stale:
                 second.get_by_role("button", name="Gemeinsamen Entwurf speichern").click()
             assert stale.value.status == 409

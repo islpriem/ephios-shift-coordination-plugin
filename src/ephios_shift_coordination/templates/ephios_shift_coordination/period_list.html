@@ -1,17 +1,59 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n static %}
 {% block title %}
     {% translate "Shift coordination" %}
 {% endblock %}
 {% block content %}
-    <h1>{% translate "Shift coordination" %}</h1>
-    <a class="btn btn-primary"
-       href="{% url 'ephios_shift_coordination:period_create' %}">{% translate "Create period" %}</a>
-    <ul class="mt-3">
+    <link rel="stylesheet"
+          href="{% static 'ephios_shift_coordination/planning.css' %}">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+        <div>
+            <h1 class="mb-1">{% translate "Shift coordination" %}</h1>
+            <p class="text-body-secondary mb-0">
+                {% translate "Create the dates of a period, ask members when they can help and publish the plan." %}
+            </p>
+        </div>
+        <a class="btn btn-primary"
+           href="{% url 'ephios_shift_coordination:period_create' %}">
+            <i class="fas fa-plus" aria-hidden="true"></i> {% translate "New planning period" %}
+        </a>
+    </div>
+    <div class="list-group sc-periods">
         {% for period in periods %}
-            <li><a href="{{ period.get_absolute_url }}">{{ period.template_snapshot.title }}: {{ period.start_date }} – {{ period.end_date }}</a> ({{ period.get_state_display }})</li>
+            <a class="list-group-item list-group-item-action"
+               href="{{ period.get_absolute_url }}">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <span class="fw-semibold">{{ period.template_snapshot.title }}</span>
+                    {% include "ephios_shift_coordination/_period_status.html" %}
+                </div>
+                <div class="text-body-secondary small">
+                    <i class="far fa-calendar" aria-hidden="true"></i>
+                    {{ period.start_date|date:"SHORT_DATE_FORMAT" }} – {{ period.end_date|date:"SHORT_DATE_FORMAT" }}
+                    {% if period.opened_at %}
+                        · <i class="fas fa-poll" aria-hidden="true"></i>
+                        {% blocktranslate with answered=period.answered invited=period.invited %}{{ answered }} of {{ invited }} members answered{% endblocktranslate %}
+                    {% endif %}
+                </div>
+                <div class="small mt-1">
+                    {% if period.effective_state == "preparation" %}
+                        <i class="fas fa-arrow-right"
+                           aria-hidden="true"></i> {% translate "Next: set the deadline and open the survey." %}
+                    {% elif period.effective_state == "survey_open" %}
+                        <i class="far fa-clock" aria-hidden="true"></i>
+                        {% blocktranslate with deadline=period.deadline|date:"SHORT_DATETIME_FORMAT" %}Members can answer until {{ deadline }}.{% endblocktranslate %}
+                    {% elif period.effective_state == "planning" %}
+                        <i class="fas fa-arrow-right"
+                           aria-hidden="true"></i> {% translate "Next: finish the plan and publish it." %}
+                    {% else %}
+                        <i class="fas fa-check" aria-hidden="true"></i>
+                        {% blocktranslate with published=period.published_at|date:"SHORT_DATETIME_FORMAT" %}Published on {{ published }}.{% endblocktranslate %}
+                    {% endif %}
+                </div>
+            </a>
         {% empty %}
-            <li>{% translate "No planning periods yet." %}</li>
+            <div class="list-group-item text-body-secondary">
+                {% translate "No planning period yet. Create one to get started." %}
+            </div>
         {% endfor %}
-    </ul>
+    </div>
 {% endblock %}

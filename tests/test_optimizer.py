@@ -2,7 +2,7 @@
 
 from collections import Counter
 from dataclasses import replace
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from itertools import product
 from random import Random
 
@@ -12,6 +12,7 @@ from ephios_shift_coordination.optimizer import propose_plan, validate_proposal
 from ephios_shift_coordination.scheduling import (
     Availability,
     Commitment,
+    Observer,
     Period,
     Person,
     PlanningInput,
@@ -241,3 +242,110 @@ def test_expired_partner_budget_keeps_valid_incumbent():
 
     repeated = ((1, 1), (2, 1), (1, 2), (2, 2))
     assert improve_partners(problem(), repeated, 0) == (tuple(sorted(repeated)), 0)
+
+
+def sitting_input(observers, **rules):
+    """Two non-overlapping shifts on one day: one needs somebody sitting in."""
+    start = datetime(2026, 10, 5, 9, tzinfo=UTC)
+    shifts = (
+        Shift(1, 1, 1, start, start + timedelta(hours=2), date(2026, 10, 5), 2, 3),
+        Shift(
+            2,
+            2,
+            1,
+            start + timedelta(hours=3),
+            start + timedelta(hours=5),
+            date(2026, 10, 5),
+            2,
+            3,
+        ),
+    )
+    qualified = {(1, 1), (2, 1), (3, 2)}
+    return PlanningInput(
+        Period(1, date(2026, 10, 5), date(2026, 10, 31), "UTC", 1),
+        Rules(2, True, 10, allow_observers=True, **rules),
+        shifts,
+        tuple(Person(i, 2, True) for i in range(1, 5)),
+        tuple(
+            Availability(
+                person,
+                shift,
+                "available" if (person, shift) in qualified else None,
+                (person, shift) in qualified,
+            )
+            for person in range(1, 5)
+            for shift in (1, 2)
+        ),
+        (),
+        observers=observers,
+    )
+
+
+def test_people_sitting_in_fill_a_shift_but_never_alone():
+    data = replace(problem(days=(5,), people=2, minimum=2, maximum=3), observers=(Observer(2, 1),))
+    data = replace(
+        data,
+        rules=replace(data.rules, allow_observers=True),
+        availability=(Availability(1, 1, "available", True), Availability(2, 1, None, False)),
+    )
+    result = propose_plan(data)
+    assert result.status == "optimal_primary"
+    assert result.assignments == ((1, 1),) and result.observers == ((2, 1),)
+    assert result.score.filled == 1 and result.score.sitting == 1
+    strict = propose_plan(replace(data, rules=replace(data.rules, minimum_regular=2)))
+    assert strict.assignments == () and strict.observers == ()
+    assert strict.unfilled == ((1, 2),)
+
+
+def test_sitting_in_stays_the_exception_and_fills_only_what_regular_staff_cannot():
+    data = sitting_input((Observer(1, 2), Observer(4, 2)))
+    result = propose_plan(data)
+    # Shift 2 needs one person sitting in; shift 1 is staffed regularly, so one is enough.
+    assert result.score.filled == 2 and result.score.sitting == 1
+    assert len(result.observers) == 1 and result.observers[0][1] == 2
+    assert (3, 2) in result.assignments
+
+
+def test_somebody_on_duty_that_day_may_sit_in_without_offering_it():
+    """Person 2 serves the second shift, so staying for the first one costs them nothing."""
+    start = datetime(2026, 10, 5, 9, tzinfo=UTC)
+    shifts = (
+        Shift(1, 1, 1, start, start + timedelta(hours=4), date(2026, 10, 5), 2, 3),
+        Shift(
+            2, 2, 1, start + timedelta(hours=4), start + timedelta(hours=8), date(2026, 10, 5), 2, 3
+        ),
+    )
+    qualified = {(1, 1), (3, 1), (2, 2), (3, 2)}
+    data = PlanningInput(
+        Period(1, date(2026, 10, 5), date(2026, 10, 5), "UTC", 1),
+        Rules(2, False, 10, allow_observers=True),
+        shifts,
+        tuple(Person(i, 1, True) for i in range(1, 4)),
+        tuple(
+            Availability(
+                person,
+                shift,
+                "available" if (person, shift) in qualified else None,
+                (person, shift) in qualified,
+            )
+            for person in range(1, 4)
+            for shift in (1, 2)
+        ),
+        (),
+    )
+    result = propose_plan(data)
+    assert result.score.filled == 2 and result.score.sitting == 1
+    sitting_person, sitting_shift = result.observers[0]
+    # Nobody offered to sit in, so the person sitting in must serve the other shift that day.
+    assert (sitting_person, 3 - sitting_shift) in result.assignments
+    # The second role is free: everybody keeps their personal maximum of one service.
+    assert all(sum(uid == person for uid, _sid in result.assignments) <= 1 for person in (1, 2, 3))
+    assert not propose_plan(
+        replace(data, rules=replace(data.rules, allow_observers=False))
+    ).observers
+
+
+def test_the_independent_validator_rejects_sitting_in_without_an_offer():
+    data = sitting_input(())
+    with pytest.raises(ValueError):
+        validate_proposal(data, ((1, 1), (2, 1), (3, 2)), ((4, 2),))

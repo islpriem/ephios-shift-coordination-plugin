@@ -6,103 +6,158 @@
 {% block content %}
     <link rel="stylesheet"
           href="{% static 'ephios_shift_coordination/planning.css' %}">
-    <h1>{% translate "Plan services" %}: {{ period.template_snapshot.title }}</h1>
-    <p>{{ period.start_date }} – {{ period.end_date }}</p>
-    <p><a href="{{ period.get_absolute_url }}">{% translate "Responses and events" %}</a></p>
+    <nav class="small mb-2">
+        <a href="{{ period.get_absolute_url }}">{{ period.template_snapshot.title }}</a>
+    </nav>
+    <div class="d-flex flex-wrap align-items-center gap-2">
+        <h1 class="mb-0">{% translate "Plan services" %}</h1>
+        {% include "ephios_shift_coordination/_period_status.html" %}
+    </div>
+    <p class="text-body-secondary">
+        {{ period.template_snapshot.title }} ·
+        {{ period.start_date|date:"DATE_FORMAT" }} – {{ period.end_date|date:"DATE_FORMAT" }}
+    </p>
     {% if error %}<p role="alert" class="alert alert-warning">{{ error }}</p>{% endif %}
     {% if planning_data %}
-        <p>{% translate "Changes remain local until you save the shared draft. Saving creates no participations or emails." %}</p>
+        {% if planning_data.survey_open %}
+            <div class="alert alert-warning" role="note">
+                <i class="far fa-clock" aria-hidden="true"></i>
+                {% blocktranslate with deadline=period.deadline|date:"DATETIME_FORMAT" %}The survey is still running until {{ deadline }}. You see the answers so far; new answers make a saved draft outdated.{% endblocktranslate %}
+                <a href="{{ period.get_absolute_url }}">{% translate "Close the survey early" %}</a>
+            </div>
+        {% endif %}
         <form id="planning-editor"
               data-validate-url="{% url 'ephios_shift_coordination:draft_validate' period.pk %}"
               data-save-url="{% url 'ephios_shift_coordination:draft_save' period.pk %}"
               data-propose-url="{% url 'ephios_shift_coordination:plan_propose' period.pk %}"
               data-calculating="{% translate 'Calculating a complete alternative…' %}"
-              data-filled="{% translate 'Fully staffed shifts' %}"
-              data-yellow="{% translate 'Yellow assignments' %}"
-              data-preferred="{% translate 'Strong preferences' %}"
-              data-partners="{% translate 'Repeated partner pairs' %}"
-              data-empty-proposal="{% translate 'This is a valid empty proposal.' %}"
+              data-filled="{% translate 'Staffed shifts' %}"
+              data-yellow="{% translate 'if needed' %}"
+              data-preferred="{% translate 'preferred' %}"
+              data-partners="{% translate 'repeated pairs' %}"
+              data-sitting="{% translate 'sitting in' %}"
+              data-proposal-summary="{% translate 'The proposal staffs {proposed} of {total} shifts; your draft staffs {current}.' %}"
+              data-proposal-detail="{% translate 'Included: {yellow} assignments marked if needed, {preferred} preferred ones, {partners} repeated pairs. You can change everything afterwards.' %}"
+              data-proposal-sitting="{% translate '{sitting} of them sit in.' %}"
+              data-empty-proposal="{% translate 'Nobody can be staffed with the current answers.' %}"
               data-replace-draft="{% translate 'Replace your unsaved selections with this complete proposal?' %}"
-              data-proposal-applied="{% translate 'Proposal adopted locally. Save the shared draft to keep it.' %}"
-              data-start="{{ period.start_date|date:'Y-m-d' }}"
-              data-end="{{ period.end_date|date:'Y-m-d' }}"
-              data-selected="{% translate 'Selected' %}"
-              data-minimum="{% translate 'Minimum' %}"
-              data-maximum="{% translate 'Maximum' %}"
-              data-free="{% translate 'Free places' %}"
+              data-proposal-applied="{% translate 'Proposal adopted. Save the shared draft to keep it.' %}"
+              data-open-places="{% translate 'Open places' %}"
+              data-exceptions="{% translate 'Exceptions' %}"
+              data-notes-label="{% translate 'Notes' %}"
+              data-notes-title="{% translate 'This person wrote a note' %}"
+              data-observers-label="{% translate 'sitting in' %}"
+              data-candidates="{% translate 'Choose people' %}"
+              data-nobody="{% translate 'Nobody available' %}"
+              data-minimum="{% translate 'at least' %}"
+              data-maximum="{% translate 'at most' %}"
               data-existing="{% translate 'Existing' %}"
               data-draft="{% translate 'Draft' %}"
-              data-total="{% translate 'Total' %}"
-              data-no-response="{% translate 'Awaiting response' %}"
+              data-no-response="{% translate 'No answer' %}"
               data-unqualified="{% translate 'Qualification missing' %}"
-              data-add-person="{% translate 'Add a person for a manual exception' %}"
+              data-add-person="{% translate 'Add somebody who did not offer this shift' %}"
               data-add="{% translate 'Add person' %}"
+              data-add-observer="{% translate 'Add as sitting in' %}"
               data-remove="{% translate 'Remove invalid assignment' %}"
-              data-confirm="{% translate 'I confirm this exception' %}"
-              data-reason="{% translate 'Reason for this exception' %}"
+              data-problem="{% translate 'Rule violation' %}"
+              data-confirm="{% translate 'I confirm these exceptions and take responsibility for them.' %}"
+              data-reason="{% translate 'Common note for the record (optional)' %}"
               data-dirty="{% translate 'Unsaved changes' %}"
-              data-checking="{% translate 'Checking current rules…' %}"
-              data-checked="{% translate 'Rules checked. Confirm any exceptions before saving.' %}"
+              data-checking="{% translate 'Checking the rules…' %}"
+              data-checked="{% translate 'Rules checked.' %}"
+              data-checked-exceptions="{% translate 'Rules checked. Confirm the exceptions before saving.' %}"
               data-saved="{% translate 'Shared draft saved' %}"
               data-failed="{% translate 'The request failed. Check your connection and try again.' %}"
-              data-baseline="{% translate 'Existing rule violations' %}"
-              data-underfilled="{% translate 'Underfilled shifts' %}">
+              data-baseline="{% translate 'Rule violations that already exist in ephios' %}">
             {% csrf_token %}
-            <div class="planning-toolbar">
-                <button type="button"
-                        class="btn btn-secondary"
-                        id="calculate-proposal">{% translate "Calculate proposal" %}</button>
-                <button type="button"
-                        class="btn btn-secondary"
-                        id="validate-draft">{% translate "Check rules" %}</button>
-                <button type="submit"
-                        class="btn btn-primary"
-                        id="save-draft"
-                        disabled>{% translate "Save shared draft" %}</button>
-                <a href="{% url 'ephios_shift_coordination:plan' period.pk %}">{% translate "Reload saved draft" %}</a>
-                <a href="{% url 'ephios_shift_coordination:publication' period.pk %}">{% translate "Review saved draft for publication" %}</a>
-                <span id="draft-status" role="status" aria-live="polite"></span>
+            <div class="sc-toolbar">
+                <button type="button" class="btn btn-outline-primary" id="calculate-proposal">
+                    <i class="fas fa-magic"
+                       aria-hidden="true"></i> {% translate "Calculate proposal" %}
+                </button>
+                <button type="submit" class="btn btn-primary" id="save-draft" disabled>
+                    <i class="fas fa-save"
+                       aria-hidden="true"></i> {% translate "Save shared draft" %}
+                </button>
+                <a class="btn btn-outline-secondary"
+                   href="{% url 'ephios_shift_coordination:publication' period.pk %}">
+                    <i class="fas fa-clipboard-check"
+                       aria-hidden="true"></i> {% translate "Check and publish" %}
+                </a>
+                <span id="draft-status" class="sc-status" role="status" aria-live="polite"></span>
+                <span class="sc-toolbar-spacer"></span>
+                <button type="button" class="btn btn-sm btn-link" id="validate-draft">
+                    {% translate "Check rules again" %}
+                </button>
+                <a class="btn btn-sm btn-link"
+                   href="{% url 'ephios_shift_coordination:plan' period.pk %}">{% translate "Reload saved draft" %}</a>
             </div>
+            <div class="sc-stats" id="planning-stats"></div>
             <div id="invalid-assignments"></div>
             <section id="proposal-preview"
+                     class="sc-proposal"
                      aria-label="{% translate 'Proposal preview' %}"
                      hidden>
-                <h2>{% translate "Proposal preview" %}</h2>
-                <p>{% translate "This complete alternative does not include manual exceptions. Adopt it explicitly, then save separately." %}</p>
-                <p id="proposal-status" role="status" aria-live="polite"></p>
-                <div id="proposal-content"></div>
-                <button type="button"
-                        class="btn btn-secondary"
-                        id="adopt-proposal"
-                        disabled>{% translate "Adopt proposal" %}</button>
+                <p id="proposal-status"
+                   class="mb-1 fw-semibold"
+                   role="status"
+                   aria-live="polite"></p>
+                <div id="proposal-content" class="small"></div>
+                <div class="d-flex flex-wrap gap-2 mt-2">
+                    <button type="button"
+                            class="btn btn-sm btn-primary"
+                            id="adopt-proposal"
+                            disabled>
+                        <i class="fas fa-check"
+                           aria-hidden="true"></i> {% translate "Use this proposal" %}
+                    </button>
+                    <button type="button" class="btn btn-sm btn-link" id="dismiss-proposal">
+                        {% translate "Keep my draft" %}
+                    </button>
+                </div>
             </section>
-            <div class="planning-layout">
-                <section aria-label="{% translate 'Service calendar' %}">
-                    <label for="planning-month">{% translate "Month" %}</label>
-                    <select id="planning-month"></select>
-                    <div id="service-calendar" class="service-calendar"></div>
+            <section id="planning-validation" aria-label="{% translate 'Rule checks' %}">
+            </section>
+            <div class="sc-plan-layout">
+                <section aria-label="{% translate 'Service calendar' %}"
+                         class="sc-plan-scroll"
+                         tabindex="0">
+                    <div id="service-calendar" class="sc-plan-calendar"></div>
                 </section>
-                <aside aria-label="{% translate 'People and responses' %}">
-                    <h2>{% translate "People and responses" %}</h2>
-                    <div id="planning-people"></div>
+                <aside aria-label="{% translate 'People and answers' %}" class="sc-people">
+                    <label class="visually-hidden"
+                           for="people-filter">{% translate "Search person" %}</label>
+                    <input type="search"
+                           id="people-filter"
+                           class="form-control form-control-sm"
+                           placeholder="{% translate 'Search person' %}">
+                    <div id="planning-people" class="sc-people-list"></div>
                 </aside>
             </div>
-            <section aria-label="{% translate 'Rule checks' %}" id="planning-validation">
-            </section>
         </form>
-        <noscript>{% translate "Enable JavaScript to edit the planning draft." %}</noscript>
+        <noscript>
+            <p class="alert alert-warning">{% translate "Enable JavaScript to edit the planning draft." %}</p>
+        </noscript>
         {{ planning_data|json_script:"planning-data" }}
         <script type="module"
                 src="{% static 'ephios_shift_coordination/planning.js' %}"></script>
-        <details>
+        <details class="sc-details mt-3">
             <summary>{% translate "Recorded exceptions" %}</summary>
-            {% for record in history %}
-                <p><strong>{{ record.rule_label }}</strong> · {{ record.people_label }} · {{ record.shifts_label }}</p>
-                <p>{% translate "Version" %} {{ record.draft_version }} · {{ record.actor|default:"—" }} · {{ record.created_at }}</p>
-                <p>{{ record.reason|linebreaksbr }}</p>
-            {% empty %}
-                <p>{% translate "No recorded exceptions." %}</p>
-            {% endfor %}
+            <div class="sc-details-body">
+                {% for record in history %}
+                    <div class="sc-history-entry">
+                        <span class="fw-semibold">{{ record.rule_label }}</span>
+                        <div class="small text-body-secondary">
+                            {{ record.people_label }} · {{ record.shifts_label }} ·
+                            {% translate "version" %} {{ record.draft_version }} ·
+                            {{ record.actor|default:"—" }} · {{ record.created_at|date:"SHORT_DATETIME_FORMAT" }}
+                        </div>
+                        {% if record.reason %}<p class="mb-0">{{ record.reason|linebreaksbr }}</p>{% endif %}
+                    </div>
+                {% empty %}
+                    <p class="text-body-secondary mb-0">{% translate "No recorded exceptions." %}</p>
+                {% endfor %}
+            </div>
         </details>
     {% endif %}
 {% endblock %}

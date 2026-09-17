@@ -1,4 +1,5 @@
 import uuid
+from collections import defaultdict
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
@@ -28,16 +29,60 @@ WEEKDAYS = list(
     )
 )
 RULE_FIELDS = [field.name for field in PlanningSettings._meta.fields if field.name != "id"]
+# Values that only make sense for the whole instance, not per planning period.
+GLOBAL_FIELDS = ("country", "region", "solver_seconds", "minimum_regular")
+
+SETTINGS_HELP = {
+    "weekdays": _("Preselected weekdays for new planning periods."),
+    "country": _("Country of the holiday calendar."),
+    "region": _("Region of the holiday calendar. Without a region, holidays cannot be skipped."),
+    "exclude_holidays": _("Preselection for new planning periods: skip public holidays."),
+    "response_days": _("Default time to answer, counted from opening a survey."),
+    "reminder_days": _(
+        "Members without a complete answer are reminded this many days before the deadline. "
+        "Separate several values with commas, for example 3, 1. Empty means no reminder."
+    ),
+    "weekly_limit": _(
+        "Most shifts one person takes per calendar week (Monday to Sunday) within one event type."
+    ),
+    "free_next_day": _("Keep the day after a service free for that person."),
+    "solver_seconds": _(
+        "Time budget for one automatic proposal. A higher value can improve a proposal, but the "
+        "request takes longer; application and proxy timeouts have to be above it."
+    ),
+    "allow_observers": _(
+        "Preselection for new planning periods: members may offer to sit in on a service. "
+        "Sitting in needs no qualification, counts as staffing and earns no working hours."
+    ),
+    "minimum_regular": _(
+        "Regularly staffed people a shift needs at least once somebody sits in. This prevents "
+        "shifts that are staffed by people sitting in only."
+    ),
+}
+
+PERIOD_HELP = {
+    "weekdays": _("Services are suggested for these weekdays. You pick the single dates below."),
+    "exclude_holidays": _("Skip the public holidays of the configured region."),
+    "response_days": _("Used for the response deadline suggested when you open the survey."),
+    "reminder_days": _(
+        "Suggested reminders when you open the survey. Separate several values with commas."
+    ),
+    "weekly_limit": _("Most shifts per person and calendar week (Monday to Sunday)."),
+    "free_next_day": _("Nobody is planned on two days in a row."),
+    "allow_observers": _(
+        "Members may offer to sit in on a service of this period: no qualification required, "
+        "counted as staffing, no working hours."
+    ),
+}
 
 
 class RuleForm(forms.ModelForm):
+    help_texts = SETTINGS_HELP
     weekdays = forms.TypedMultipleChoiceField(
         label=_("Weekdays"), choices=WEEKDAYS, coerce=int, widget=forms.CheckboxSelectMultiple
     )
     reminder_days = forms.CharField(
-        label=_("Reminder days before deadline"),
-        required=False,
-        help_text=_("Comma-separated positive day offsets; leave empty for no reminders."),
+        label=_("Reminders in days before the deadline"), required=False
     )
     country = forms.ChoiceField(
         label=_("Holiday country"),
@@ -58,6 +103,9 @@ class RuleForm(forms.ModelForm):
         ]
         offsets = self.initial.get("reminder_days", [3])
         self.initial["reminder_days"] = ", ".join(map(str, offsets))
+        for name, help_text in self.help_texts.items():
+            if name in self.fields:
+                self.fields[name].help_text = help_text
 
     def clean_reminder_days(self):
         try:
@@ -75,7 +123,14 @@ class RuleForm(forms.ModelForm):
 
 class SettingsForm(RuleForm):
     planning_groups = forms.ModelMultipleChoiceField(
-        label=_("Groups allowed to manage planning"), queryset=Group.objects.all(), required=False
+        label=_("Groups allowed to manage planning"),
+        queryset=Group.objects.all(),
+        required=False,
+        help_text=_(
+            "Members of these groups create planning periods, open surveys and publish plans. "
+            "In ephios they also need the rights to create events and to publish them for the "
+            "template's groups."
+        ),
     )
 
     def __init__(self, *args, **kwargs):
@@ -111,6 +166,19 @@ class ServiceTemplateForm(forms.ModelForm):
             "responsible_groups",
             "responsible_users",
         ]
+        help_texts = {
+            "title": _("Title of every event created from this template."),
+            "description": _("Shown on the event page in ephios."),
+            "event_type": _(
+                "Weekly limits, overlaps and consecutive days only count services of this type."
+            ),
+            "visible_for": _("These groups see the services and are invited to the survey."),
+            "responsible_groups": _(
+                "May edit the created events and receive messages about missing staff. "
+                "Coordinators need this to plan the period."
+            ),
+            "responsible_users": _("Additional responsible people besides the groups."),
+        }
 
 
 class ShiftTemplateForm(forms.ModelForm):
@@ -129,6 +197,14 @@ class ShiftTemplateForm(forms.ModelForm):
         widgets = {
             name: forms.TimeInput(format="%H:%M", attrs={"type": "time"})
             for name in ("meeting_time", "start_time", "end_time")
+        }
+        help_texts = {
+            "label": _("Short name, for example phone or early shift."),
+            "meeting_time": _("When people meet, at the latest at the start."),
+            "end_day_offset": _("Choose the next day for shifts that run past midnight."),
+            "minimum": _("Automatic planning staffs exactly this many people, or nobody."),
+            "maximum": _("Empty means no limit. More people only through a manual exception."),
+            "qualifications": _("Only members holding all of these are asked for this shift."),
         }
 
 
@@ -159,21 +235,37 @@ ShiftFormSet = inlineformset_factory(
 
 
 class PeriodForm(RuleForm):
+    help_texts = PERIOD_HELP
     template = forms.ModelChoiceField(
-        label=_("Service template"), queryset=ServiceTemplate.objects.all()
+        label=_("Service template"),
+        queryset=ServiceTemplate.objects.all(),
+        help_text=_(
+            "Sets title, location, visibility and the shifts of every service in this period."
+        ),
     )
     start_date = forms.DateField(
-        label=_("Start date"), widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")
+        label=_("First day"), widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")
     )
     end_date = forms.DateField(
-        label=_("End date"), widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")
+        label=_("Last day"), widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")
     )
     creation_key = forms.UUIDField(widget=forms.HiddenInput)
 
-    def __init__(self, *args, **kwargs):
+    class Meta(RuleForm.Meta):
+        fields = [name for name in RULE_FIELDS if name not in GLOBAL_FIELDS]
+
+    def __init__(self, *args, defaults, **kwargs):
         super().__init__(*args, **kwargs)
+        for name in GLOBAL_FIELDS:
+            self.fields.pop(name, None)
+            setattr(self.instance, name, defaults[name])
         start, end = next_month(timezone.localdate())
         self.initial.update(start_date=start, end_date=end, creation_key=uuid.uuid4())
+        if not defaults["region"]:
+            self.fields["exclude_holidays"].disabled = True
+            self.fields["exclude_holidays"].help_text = _(
+                "Configure a holiday region in the planning settings to use this."
+            )
 
     def clean(self):
         cleaned = super().clean()
@@ -182,8 +274,16 @@ class PeriodForm(RuleForm):
             and cleaned.get("end_date")
             and cleaned["start_date"] > cleaned["end_date"]
         ):
-            self.add_error("end_date", _("The end date must not precede the start date."))
+            self.add_error("end_date", _("The last day must not precede the first day."))
         return cleaned
+
+    def rules(self):
+        return {
+            name: self.cleaned_data[name]
+            if name in self.cleaned_data
+            else getattr(self.instance, name)
+            for name in RULE_FIELDS
+        }
 
     def selected_dates(self, values):
         try:
@@ -207,20 +307,60 @@ class SurveyOpeningForm(forms.Form):
     deadline = forms.DateTimeField(
         label=_("Response deadline"),
         widget=forms.DateTimeInput(attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"),
+        help_text=_(
+            "Until then members can answer and change their answer. It has to be before the "
+            "first shift starts."
+        ),
     )
     reminder_days = forms.CharField(
-        label=_("Reminder days before deadline"),
+        label=_("Reminders in days before the deadline"),
         required=False,
-        help_text=_("Comma-separated positive day offsets; leave empty for no reminders."),
+        help_text=_(
+            "Members without a complete answer get a reminder. Separate several values with "
+            "commas, for example 3, 1. Empty means no reminder."
+        ),
+    )
+    maximum = forms.IntegerField(
+        label=_("Recommended shifts per person"),
+        min_value=0,
+        required=False,
+        help_text=_("Shown to members as a suggestion for their personal maximum."),
     )
     clean_reminder_days = RuleForm.clean_reminder_days
+
+    def __init__(self, *args, hint="", **kwargs):
+        super().__init__(*args, **kwargs)
+        if hint:
+            self.fields["maximum"].help_text = hint
+
+
+class SurveyClosingForm(forms.Form):
+    expected_version = forms.IntegerField(widget=forms.HiddenInput, min_value=1)
+    confirm_close = forms.BooleanField(
+        label=_("Close the survey now. Answers become read-only, planning continues.")
+    )
 
 
 class SurveyResponseForm(forms.Form):
     expected_version = forms.IntegerField(widget=forms.HiddenInput, min_value=0)
-    maximum = forms.IntegerField(label=_("Personal maximum"), min_value=0, max_value=2147483647)
+    maximum = forms.IntegerField(
+        label=_("Your personal maximum"),
+        min_value=0,
+        max_value=2147483647,
+        help_text=_(
+            "How many shifts may we assign to you at most in this period? Enter 0 if you cannot "
+            "take a shift this time."
+        ),
+    )
     notes = forms.CharField(
-        label=_("Notes"), required=False, max_length=4000, widget=forms.Textarea
+        label=_("Notes for the coordinators"),
+        required=False,
+        max_length=4000,
+        widget=forms.Textarea(attrs={"rows": 3}),
+        help_text=_(
+            "Optional, for example holidays or who you would like to work with. Only "
+            "coordinators read this."
+        ),
     )
 
     def __init__(self, *args, response, **kwargs):
@@ -229,35 +369,104 @@ class SurveyResponseForm(forms.Form):
 
         super().__init__(*args, **kwargs)
         self.response = response
+        period = response.period
+        self.scale = Availability.Rating.choices
+        self.allow_observers = bool(period.rules.get("allow_observers"))
         self.initial.update(
-            expected_version=response.version, maximum=response.maximum, notes=response.notes
+            expected_version=response.version,
+            maximum=response.maximum
+            if response.maximum is not None
+            else period.suggestion.get("maximum"),
+            notes=response.notes,
         )
+        zone = ZoneInfo(period.timezone)
         ratings = dict(response.availabilities.values_list("planned_shift_id", "rating"))
         self.offered = sorted(
             response.offered_shifts.select_related("shift__event__type", "event"),
             key=lambda shift: (datetime.fromisoformat(shift.snapshot["start_time"]), shift.pk),
         )
+        columns, by_event = {}, defaultdict(dict)
         for shift in self.offered:
+            start = datetime.fromisoformat(shift.snapshot["start_time"]).astimezone(zone)
+            end = datetime.fromisoformat(shift.snapshot["end_time"]).astimezone(zone)
+            column = f"{shift.snapshot['label']} {start:%H:%M}"
+            hours = "{start} – {end}".format(
+                start=date_format(start, "TIME_FORMAT"), end=date_format(end, "TIME_FORMAT")
+            )
+            columns.setdefault(
+                column,
+                {
+                    "key": column,
+                    "label": shift.snapshot["label"],
+                    "time": hours,
+                    "order": start.time(),
+                },
+            )
+            by_event[shift.event_id][column] = shift
             name = f"rating_{shift.pk}"
-            start = datetime.fromisoformat(shift.snapshot["start_time"]).astimezone(
-                ZoneInfo(response.period.timezone)
-            )
-            end = datetime.fromisoformat(shift.snapshot["end_time"]).astimezone(
-                ZoneInfo(response.period.timezone)
-            )
-            label = (
-                f"{date_format(start, 'DATETIME_FORMAT')} – {date_format(end, 'TIME_FORMAT')}"
-                f" · {shift.snapshot['label']}"
-            )
             self.fields[name] = forms.ChoiceField(
-                label=label,
+                label=_("{shift} on {date}").format(
+                    shift=shift.snapshot["label"], date=date_format(start, "DATE_FORMAT")
+                ),
                 choices=Availability.Rating.choices,
                 widget=forms.RadioSelect,
-                help_text=_("Currently no longer eligible for this shift.")
-                if not eligible(response.user, shift)
-                else "",
+                help_text=""
+                if eligible(response.user, shift)
+                else _("You currently do not meet the requirements for this shift."),
             )
             self.initial[name] = ratings.get(shift.pk)
+        self.columns = sorted(columns.values(), key=lambda column: (column["order"], column["key"]))
+        wished = set(response.observer_events.values_list("pk", flat=True))
+        self.rows, self.observed = [], []
+        for link in period.events.select_related("event").order_by("date"):
+            observable = (
+                self.allow_observers
+                and link.event is not None
+                and link.event.active
+                and response.user.has_perm("core.view_event", link.event)
+            )
+            if not by_event[link.pk] and not observable:
+                continue
+            observe = None
+            if observable:
+                observe = f"observe_{link.pk}"
+                self.fields[observe] = forms.BooleanField(
+                    label=_("Sit in on the service on {date}").format(
+                        date=date_format(link.date, "DATE_FORMAT")
+                    ),
+                    required=False,
+                )
+                self.initial[observe] = link.pk in wished
+                self.observed.append((link.pk, observe))
+            self.rows.append(
+                {
+                    "date": link.date,
+                    "cells": [
+                        {
+                            "column": column["key"],
+                            "name": shift and f"rating_{shift.pk}",
+                        }
+                        for column in self.columns
+                        for shift in [by_event[link.pk].get(column["key"])]
+                    ],
+                    "observe": observe,
+                }
+            )
+
+    def table(self):
+        for row in self.rows:
+            yield {
+                "date": row["date"],
+                "cells": [
+                    {
+                        "column": cell["column"],
+                        "field": self[cell["name"]] if cell["name"] else None,
+                        "warning": self.fields[cell["name"]].help_text if cell["name"] else "",
+                    }
+                    for cell in row["cells"]
+                ],
+                "observe": self[row["observe"]] if row["observe"] else None,
+            }
 
     def clean(self):
         cleaned = super().clean()
@@ -270,21 +479,24 @@ class SurveyResponseForm(forms.Form):
     def ratings(self):
         return {shift.pk: self.cleaned_data[f"rating_{shift.pk}"] for shift in self.offered}
 
+    def observer_events(self):
+        return [pk for pk, name in self.observed if self.cleaned_data.get(name)]
+
 
 class PublicationForm(forms.Form):
     expected_version = forms.IntegerField(min_value=1, widget=forms.HiddenInput)
     fingerprint = forms.RegexField(regex=r"^[0-9a-f]{64}$", widget=forms.HiddenInput)
     confirmed_tokens = forms.MultipleChoiceField(
-        label=_("Confirm every recorded exception for publication"),
+        label=_("Confirm every recorded exception once more"),
         required=False,
         widget=forms.CheckboxSelectMultiple,
     )
     confirm_underfilled = forms.BooleanField(
-        label=_("I confirm publication with the missing minimum places shown above."),
+        label=_("I publish although some shifts are missing people."),
         required=False,
     )
     confirm_publish = forms.BooleanField(
-        label=_("I confirm publication of this saved shared draft.")
+        label=_("I checked this plan and want to publish it. Everybody staffed gets a message.")
     )
 
     def __init__(self, *args, review, **kwargs):
@@ -295,3 +507,11 @@ class PublicationForm(forms.Form):
         ]
         self.fields["confirm_underfilled"].required = bool(review["underfilled"])
         self.initial.update(expected_version=review["version"], fingerprint=review["fingerprint"])
+
+
+class StaffingForm(forms.Form):
+    user_id = forms.IntegerField(min_value=1, widget=forms.HiddenInput)
+    action = forms.ChoiceField(
+        choices=[("join", _("Sign up")), ("observe", _("Sit in")), ("leave", _("Sign off"))],
+        widget=forms.HiddenInput,
+    )

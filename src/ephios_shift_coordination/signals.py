@@ -79,26 +79,43 @@ def permission_fields(sender, **kwargs):
 
 @receiver(insert_html, sender=HTML_EVENT_INFO, dispatch_uid="shift_coordination.event_info")
 def event_info(sender, request, event, **kwargs):
+    from .models import PlanningPeriod
+    from .staffing import options, service_shifts
+
     link = PlannedEvent.objects.select_related("period").filter(event=event).first()
     if not link or not request.user.has_perm("core.view_event", event):
         return ""
+    shifts = []
+    if link.period.state == PlanningPeriod.State.PUBLISHED:
+        shifts = [options(request.user, planned) for planned in service_shifts(link)]
+    coordinator = can_plan(request.user)
     return render_to_string(
         "ephios_shift_coordination/event_info.html",
         {
             "period": link.period,
-            "can_plan": can_plan(request.user),
+            "service": link,
+            "can_plan": coordinator,
             "response": SurveyResponse.objects.filter(
                 period=link.period, user=request.user
             ).first(),
+            "shifts": shifts,
+            "replacement": coordinator or any(state["mine"] for state in shifts),
         },
+        request=request,
     )
 
 
 @receiver(register_notification_types, dispatch_uid="shift_coordination.notifications")
 def notification_types(sender, **kwargs):
-    from .notifications import PlanPublished, SurveyInvitation, SurveyReminder
+    from .notifications import (
+        PlanPublished,
+        ShiftUnderstaffed,
+        StaffingChanged,
+        SurveyInvitation,
+        SurveyReminder,
+    )
 
-    return [SurveyInvitation, SurveyReminder, PlanPublished]
+    return [SurveyInvitation, SurveyReminder, PlanPublished, ShiftUnderstaffed, StaffingChanged]
 
 
 @receiver(periodic_signal, dispatch_uid="shift_coordination.survey_periodic")

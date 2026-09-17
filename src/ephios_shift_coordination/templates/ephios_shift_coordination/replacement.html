@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% load i18n static %}
+{% block title %}
+    {% translate "Staffing and replacements" %}
+{% endblock %}
+{% block content %}
+    <link rel="stylesheet"
+          href="{% static 'ephios_shift_coordination/planning.css' %}">
+    <h1 class="mb-1">{% translate "Staffing and replacements" %}</h1>
+    {% if service.event %}
+        <p class="text-body-secondary">
+            <a href="{{ service.event.get_absolute_url }}">{{ service.event.title }}</a>
+            · {{ service.date|date:"DATE_FORMAT" }}
+        </p>
+    {% endif %}
+    {% if error %}
+        <p class="alert alert-warning" role="alert">{{ error }}</p>
+    {% else %}
+        <div class="alert alert-info" role="note">
+            {% if coordinator %}
+                {% translate "Who answered that they are available on this day, whether they may take the shift and what would speak against it. You can staff people directly." %}
+            {% else %}
+                {% translate "If you cannot make it, ask one of these members first and then sign off. Everybody listed said they are available on this day." %}
+            {% endif %}
+        </div>
+        {% for row in shifts %}
+            <section class="sc-card" data-shift="{{ row.planned.pk }}">
+                <h2 class="sc-card-title">
+                    <i class="fas fa-user-clock" aria-hidden="true"></i>
+                    {{ row.planned.snapshot.label }}
+                    <span class="fw-normal text-body-secondary">
+                        {{ row.planned.shift.start_time|time:"H:i" }}–{{ row.planned.shift.end_time|time:"H:i" }}
+                    </span>
+                    {% if row.staffing.sufficient %}
+                        <span class="badge text-bg-success">{{ row.staffing.count }}/{{ row.staffing.minimum }}</span>
+                    {% else %}
+                        <span class="badge text-bg-danger">
+                            {{ row.staffing.count }}/{{ row.staffing.minimum }} · {% translate "people missing" %}
+                        </span>
+                    {% endif %}
+                </h2>
+                <div class="sc-card-body">
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                        <span class="text-body-secondary">{% translate "Staffed:" %}</span>
+                        {% for member in row.staffing.rows %}
+                            <span class="sc-chip {% if member.observer %}sc-observer{% else %}sc-r-available{% endif %}">
+                                {% if member.observer %}
+                                    <i class="fas fa-chair" aria-hidden="true"></i>
+                                {% else %}
+                                    <i class="fas fa-user" aria-hidden="true"></i>
+                                {% endif %}
+                                {{ member.name }}
+                                {% if coordinator and member.user %}
+                                    <form method="post"
+                                          class="d-inline"
+                                          action="{% url 'ephios_shift_coordination:staffing_action' row.planned.pk %}">
+                                        {% csrf_token %}
+                                        <input type="hidden"
+                                               name="user_id"
+                                               value="{{ member.user.pk }}">
+                                        <input type="hidden" name="action" value="leave">
+                                        <button class="sc-chip-action"
+                                                type="submit"
+                                                data-bs-toggle="tooltip"
+                                                title="{% translate 'Remove from this shift' %}">
+                                            <i class="fas fa-times" aria-hidden="true"></i>
+                                            <span class="visually-hidden">{% translate "Remove from this shift" %}</span>
+                                        </button>
+                                    </form>
+                                {% endif %}
+                            </span>
+                        {% empty %}
+                            <span class="text-body-secondary">{% translate "nobody yet" %}</span>
+                        {% endfor %}
+                    </div>
+                    <form method="post"
+                          class="d-flex flex-wrap gap-2 mb-3"
+                          action="{% url 'ephios_shift_coordination:staffing_action' row.planned.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="user_id" value="{{ request.user.pk }}">
+                        {% if row.options.can_leave %}
+                            <button class="btn btn-sm btn-outline-danger"
+                                    type="submit"
+                                    name="action"
+                                    value="leave">
+                                <i class="fas fa-user-slash"
+                                   aria-hidden="true"></i> {% translate "I cannot make it" %}
+                            </button>
+                        {% else %}
+                            {% if row.options.can_join %}
+                                <button class="btn btn-sm btn-outline-success"
+                                        type="submit"
+                                        name="action"
+                                        value="join">
+                                    <i class="fas fa-user-plus"
+                                       aria-hidden="true"></i> {% translate "I take this shift" %}
+                                </button>
+                            {% endif %}
+                            {% if row.options.can_observe %}
+                                <button class="btn btn-sm btn-outline-secondary"
+                                        type="submit"
+                                        name="action"
+                                        value="observe">
+                                    <i class="fas fa-chair"
+                                       aria-hidden="true"></i> {% translate "I sit in" %}
+                                </button>
+                            {% endif %}
+                        {% endif %}
+                    </form>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th scope="col">{% translate "Member" %}</th>
+                                    <th scope="col">{% translate "Availability" %}</th>
+                                    <th scope="col">{% translate "Possible as" %}</th>
+                                    <th scope="col">{% translate "Worth knowing" %}</th>
+                                    {% if coordinator %}
+                                        <th scope="col">{% translate "Action" %}</th>
+                                    {% endif %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for candidate in row.candidates %}
+                                    <tr>
+                                        <td>{{ candidate.name }}</td>
+                                        <td>
+                                            {% if candidate.rating %}
+                                                <span class="sc-chip sc-r-{{ candidate.rating }}">
+                                                    {% include "ephios_shift_coordination/_rating_icon.html" with value=candidate.rating %}
+                                                    {{ candidate.rating_label }}
+                                                </span>
+                                            {% else %}
+                                                <span class="text-body-secondary">{% translate "not asked for this shift" %}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if candidate.regular %}
+                                                <i class="fas fa-check text-success"
+                                                   aria-hidden="true"></i> {% translate "regular shift" %}
+                                            {% else %}
+                                                <i class="fas fa-chair"
+                                                   aria-hidden="true"></i> {% translate "sitting in" %}
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if candidate.blocked %}
+                                                <span class="text-danger">
+                                                    <i class="fas fa-ban" aria-hidden="true"></i> {% translate "already staffed at that time" %}
+                                                </span>
+                                            {% else %}
+                                                {% for warning in candidate.warnings %}
+                                                    <span class="sc-chip sc-r-if_needed">
+                                                        <i class="fas fa-exclamation-triangle"
+                                                           aria-hidden="true"></i> {{ warning }}
+                                                    </span>
+                                                {% empty %}
+                                                    <span class="text-success"><i class="fas fa-check" aria-hidden="true"></i> {% translate "no objections" %}</span>
+                                                {% endfor %}
+                                            {% endif %}
+                                        </td>
+                                        {% if coordinator %}
+                                            <td>
+                                                {% if not candidate.blocked and not row.staffing.full %}
+                                                    <form method="post"
+                                                          action="{% url 'ephios_shift_coordination:staffing_action' row.planned.pk %}">
+                                                        {% csrf_token %}
+                                                        <input type="hidden"
+                                                               name="user_id"
+                                                               value="{{ candidate.user.pk }}">
+                                                        <button class="btn btn-sm btn-outline-primary"
+                                                                type="submit"
+                                                                name="action"
+                                                                value="{% if candidate.regular %}join{% else %}observe{% endif %}">
+                                                            <i class="fas fa-user-plus"
+                                                               aria-hidden="true"></i> {% translate "Staff" %}
+                                                        </button>
+                                                    </form>
+                                                {% endif %}
+                                            </td>
+                                        {% endif %}
+                                    </tr>
+                                {% empty %}
+                                    <tr>
+                                        <td colspan="{% if coordinator %}5{% else %}4{% endif %}"
+                                            class="text-body-secondary">
+                                            {% translate "Nobody else answered that they are available on this day." %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% if coordinator and row.planned.shift %}
+                        <a class="small"
+                           href="{% url 'core:shift_disposition' row.planned.shift.pk %}">
+                            <i class="fas fa-exchange-alt"
+                               aria-hidden="true"></i> {% translate "Open the ephios disposition for this shift" %}
+                        </a>
+                    {% endif %}
+                </div>
+            </section>
+        {% endfor %}
+    {% endif %}
+{% endblock %}

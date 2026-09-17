@@ -20,13 +20,13 @@ from ephios.core.models import UserProfile
 from ephios_shift_coordination.models import PlanningSettings, ServiceTemplate
 from ephios_shift_coordination.services import create_period
 from ephios_shift_coordination.surveys import open_survey, save_response
-from ephios_shift_coordination.drafts import load_plan, save_draft
+from ephios_shift_coordination.drafts import load_plan, save_draft, validate_draft
 coordinator = UserProfile.objects.get(email='demo-001@example.invalid')
 period = create_period(coordinator, template_id=ServiceTemplate.objects.get(title='Dienst').pk,
     start_date=date(2035, 4, 1), end_date=date(2035, 4, 30), dates=[date(2035, 4, 2)],
     rules=PlanningSettings.objects.get(pk=1).snapshot(), creation_key=uuid.uuid4())
 period = open_survey(coordinator, period.pk, expected_version=1)
-for index in (5, 6, 43, 44):
+for index in (5, 6, 23, 24):
     person = UserProfile.objects.get(email=f'demo-{index:03d}@example.invalid')
     response = period.responses.get(user=person)
     save_response(person, period.pk, expected_version=0, maximum=2, notes='Private fixture note',
@@ -36,8 +36,13 @@ period.save(update_fields=['deadline'])
 uid = UserProfile.objects.get(email='demo-005@example.invalid').pk
 sid = period.events.first().shifts.first().pk
 plan = load_plan(coordinator, period.pk)
+# One person alone leaves the two-person shift partly staffed, which is a confirmed exception.
+checks = validate_draft(coordinator, period.pk, expected_version=plan['version'],
+    fingerprint=plan['fingerprint'], assignments=[[uid, sid]])
+confirmations = [{'token': v['token'], 'confirmed': True, 'reason': ''}
+    for v in checks['violations']]
 save_draft(coordinator, period.pk, expected_version=plan['version'],
-    fingerprint=plan['fingerprint'], assignments=[[uid, sid]], confirmations=[])
+    fingerprint=plan['fingerprint'], assignments=[[uid, sid]], confirmations=confirmations)
 print(json.dumps({'period': period.pk, 'person': uid, 'shift': sid}))
 """)
     )
@@ -51,7 +56,7 @@ print(json.dumps({'period': period.pk, 'person': uid, 'shift': sid}))
         second = browser.new_page(service_workers="block", locale="de-DE")
         try:
             for page, index in ((first, 1), (second, 2)):
-                login(page, f"demo-{index:03d}@example.invalid", "demo-only-member-password")
+                login(page, f"demo-{index:03d}@example.invalid", "demo")
                 page.goto(url)
             saved_choice = first.locator(
                 f'input[data-person="{setup["person"]}"][data-shift="{setup["shift"]}"]'
@@ -71,7 +76,7 @@ print(json.dumps({'period': period.pk, 'person': uid, 'shift': sid}))
             second.reload()
             expect(second.locator("input[data-person]:checked")).to_have_count(1)
             assert "Private fixture note" not in json.dumps(result)
-            adopt = first.get_by_role("button", name="Vorschlag übernehmen", exact=True)
+            adopt = first.get_by_role("button", name="Diesen Vorschlag übernehmen", exact=True)
             first.once("dialog", lambda dialog: dialog.dismiss())
             adopt.click()
             expect(first.locator("input[data-person]:checked")).to_have_count(0)
@@ -140,7 +145,9 @@ print(json.dumps({'period': period.pk, 'person': uid, 'shift': sid}))
             )
             calculate.click()
             expect(
-                first.get_by_text("Dies ist ein gültiger leerer Vorschlag.", exact=True)
+                first.get_by_text(
+                    "Mit den aktuellen Antworten lässt sich niemand einteilen.", exact=True
+                )
             ).to_be_visible()
             expect(adopt).to_be_enabled()
             first.once("dialog", lambda dialog: dialog.accept())

@@ -1,58 +1,115 @@
 {% extends "base.html" %}
-{% load i18n tz %}
+{% load crispy_forms_filters i18n static tz %}
 {% block title %}
     {% translate "Publication" %}
 {% endblock %}
 {% block content %}
+    <link rel="stylesheet"
+          href="{% static 'ephios_shift_coordination/planning.css' %}">
     {% timezone period.timezone %}
-        <h1>
-            {% if period.state == "published" %}
-                {% translate "Published plan" %}
-            {% else %}
-                {% translate "Review saved draft for publication" %}
-            {% endif %}
-        </h1>
-        <p>{{ period.template_snapshot.title }} · {{ period.start_date }} – {{ period.end_date }}</p>
+        <nav class="small mb-2">
+            <a href="{{ period.get_absolute_url }}">{{ period.template_snapshot.title }}</a>
+        </nav>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <h1 class="mb-0">
+                {% if period.state == "published" %}
+                    {% translate "Published service plan" %}
+                {% else %}
+                    {% translate "Check and publish" %}
+                {% endif %}
+            </h1>
+            {% include "ephios_shift_coordination/_period_status.html" %}
+        </div>
+        <p class="text-body-secondary">
+            {{ period.template_snapshot.title }} ·
+            {{ period.start_date|date:"DATE_FORMAT" }} – {{ period.end_date|date:"DATE_FORMAT" }}
+        </p>
+        {% include "ephios_shift_coordination/_period_steps.html" %}
         {% if error %}<p class="alert alert-warning" role="alert">{{ error }}</p>{% endif %}
         {% if period.state == "published" %}
-            <p>{% translate "Published by" %}: {{ period.published_by|default:"—" }} · {{ period.published_at }} · {% translate "Version" %} {{ period.version }}</p>
-            <p>{% translate "This record preserves the published plan. Make later assignment changes in ephios." %}</p>
+            <div class="alert alert-success" role="note">
+                <i class="fas fa-check-circle" aria-hidden="true"></i>
+                {% blocktranslate with person=period.published_by|default:"—" time=period.published_at|date:"DATETIME_FORMAT" %}Published by {{ person }} on {{ time }}.{% endblocktranslate %}
+                {% translate "This page keeps the plan as it was published. Later changes happen in ephios." %}
+            </div>
             {% if changed %}
-                <p class="alert alert-warning"
-                   role="status">{% translate "Current ephios data differs from this published record." %}</p>
+                <div class="alert alert-warning" role="status">
+                    <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+                    {% translate "Current ephios data differs from this published record." %}
+                </div>
             {% endif %}
         {% elif form %}
-            <p>{% translate "Only the saved shared draft shown here will be published. Unsaved calendar selections are not included." %}</p>
-            <h2>{% translate "Summary recipients" %}</h2>
-            <p>{{ recipients|join:", "|default:"—" }}</p>
+            <div class="sc-facts">
+                <div>
+                    <span class="sc-fact-value">{{ filled }}/{{ total }}</span>
+                    <span class="sc-fact-label">{% translate "shifts fully staffed" %}</span>
+                </div>
+                <div>
+                    <span class="sc-fact-value">{{ recipients|length }}</span>
+                    <span class="sc-fact-label">{% translate "people get a message" %}</span>
+                </div>
+                <div>
+                    <span class="sc-fact-value">{{ overrides|length }}</span>
+                    <span class="sc-fact-label">{% translate "recorded exceptions" %}</span>
+                </div>
+            </div>
+            <p class="text-body-secondary">
+                {% translate "Only the saved shared draft shown here is published. Unsaved selections in the planning view are not included." %}
+            </p>
         {% endif %}
         {% if rows %}
             <div class="table-responsive">
-                <table class="table">
+                <table class="table align-middle sc-plan-table">
                     <thead>
                         <tr>
-                            <th>{% translate "Shift" %}</th>
-                            <th>{% translate "Assignments in this plan" %}</th>
-                            <th>{% translate "Minimum staffing" %}</th>
+                            <th scope="col">{% translate "Shift" %}</th>
+                            <th scope="col">{% translate "Staffed" %}</th>
+                            <th scope="col">{% translate "Staffing" %}</th>
                             {% if period.state == "published" %}
-                                <th>{% translate "Current ephios plan" %}</th>
+                                <th scope="col">{% translate "Current state in ephios" %}</th>
                             {% endif %}
                         </tr>
                     </thead>
                     <tbody>
                         {% for row in rows %}
                             <tr>
-                                <td>{{ row.start }} – {{ row.end }} · {{ row.label }}</td>
-                                <td>{{ row.people|join:", "|default:"—" }}</td>
-                                <td>{{ row.people|length }} / {{ row.minimum }}{% if row.people|length < row.minimum %} · {% translate "Understaffed" %}{% endif %}</td>
+                                <td>
+                                    <span class="fw-semibold">{{ row.start|date:"D" }}, {{ row.start|date:"SHORT_DATE_FORMAT" }}</span>
+                                    {{ row.start|date:"H:i" }}–{{ row.end|date:"H:i" }}
+                                    <div class="text-body-secondary small">{{ row.label }}</div>
+                                </td>
+                                <td>
+                                    {% for name in row.people %}<span class="sc-chip sc-r-available"><i class="fas fa-user" aria-hidden="true"></i> {{ name }}</span>{% endfor %}
+                                    {% for name in row.observers %}<span class="sc-chip sc-observer"><i class="fas fa-chair" aria-hidden="true"></i> {{ name }}</span>{% endfor %}
+                                    {% if not row.people and not row.observers %}<span class="text-body-secondary">—</span>{% endif %}
+                                </td>
+                                <td>
+                                    {% if row.staffed < row.minimum %}
+                                        <span class="badge text-bg-danger">
+                                            {{ row.staffed }}/{{ row.minimum }} · {% translate "people missing" %}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge text-bg-success">{{ row.staffed }}/{{ row.minimum }}</span>
+                                    {% endif %}
+                                </td>
                                 {% if period.state == "published" %}
                                     <td>
                                         {% if row.changed %}
-                                            {% translate "Changed in ephios" %}
+                                            <span class="text-warning">
+                                                <i class="fas fa-exclamation-triangle"
+                                                   aria-hidden="true"></i> {% translate "Changed in ephios" %}
+                                            </span>
                                         {% else %}
-                                            {% translate "Matches the published record" %}
+                                            <span class="text-success"><i class="fas fa-check" aria-hidden="true"></i> {% translate "unchanged" %}</span>
                                         {% endif %}
-                                        {% if row.url %}<a href="{{ row.url }}">{% translate "Open current shift" %}</a>{% else %} · {% translate "Original shift deleted" %}{% endif %}</td>{% endif %}
+                                        {% if row.url %}
+                                            <a class="small"
+                                               href="{{ row.url }}">{% translate "Open the shift" %}</a>
+                                        {% else %}
+                                            <span class="small text-body-secondary">{% translate "The original shift was deleted." %}</span>
+                                        {% endif %}
+                                    </td>
+                                {% endif %}
                             </tr>
                         {% endfor %}
                     </tbody>
@@ -60,28 +117,73 @@
             </div>
         {% endif %}
         {% if overrides %}
-            <h2>{% translate "Recorded exceptions" %}</h2>
-            {% for record in overrides %}<p><strong>{{ record.rule_label }}</strong> · {{ record.people_label }} · {{ record.shifts_label }} · {{ record.actor|default:"—" }} · {{ record.created_at }}</p><p>{{ record.reason|linebreaksbr }}</p>{% endfor %}
+            <section class="sc-card">
+                <h2 class="sc-card-title">
+                    <i class="fas fa-user-shield"
+                       aria-hidden="true"></i> {% translate "Recorded exceptions" %}
+                </h2>
+                <ul class="list-group list-group-flush">
+                    {% for record in overrides %}
+                        <li class="list-group-item">
+                            <span class="fw-semibold">{{ record.rule_label }}</span>
+                            <div class="small text-body-secondary">
+                                {{ record.people_label }} · {{ record.shifts_label }}
+                                · {{ record.actor|default:"—" }} · {{ record.created_at|date:"SHORT_DATETIME_FORMAT" }}
+                            </div>
+                            <p class="mb-0">{{ record.reason|linebreaksbr }}</p>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </section>
         {% endif %}
         {% if form and period.state != "published" %}
-            {% if underfilled %}
-                <p class="alert alert-warning">{% translate "The rows marked understaffed include missing minimum places. Publication requires explicit confirmation." %}</p>
+            <section class="sc-card">
+                <h2 class="sc-card-title">
+                    <i class="fas fa-paper-plane" aria-hidden="true"></i> {% translate "Publish" %}
+                </h2>
+                <div class="sc-card-body">
+                    {% if underfilled %}
+                        <div class="alert alert-warning" role="note">
+                            <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+                            {% translate "Some shifts are missing people. You can publish anyway, but please confirm it." %}
+                        </div>
+                    {% endif %}
+                    <p>
+                        {% translate "Publishing creates confirmed ephios participations and sends one summary per person, using their notification settings." %}
+                    </p>
+                    <form method="post"
+                          action="{% url 'ephios_shift_coordination:publish' period.pk %}">
+                        {% csrf_token %}
+                        {{ form.non_field_errors }}
+                        {{ form.expected_version }}
+                        {{ form.expected_version.errors }}
+                        {{ form.fingerprint }}
+                        {{ form.fingerprint.errors }}
+                        {% if overrides %}{{ form.confirmed_tokens|as_crispy_field }}{% endif %}
+                        {% if underfilled %}{{ form.confirm_underfilled|as_crispy_field }}{% endif %}
+                        {{ form.confirm_publish|as_crispy_field }}
+                        <button type="submit"
+                                class="btn btn-primary btn-lg"
+                                data-sc-busy="{% translate 'The plan is being published and the messages are prepared…' %}">
+                            <i class="fas fa-paper-plane"
+                               aria-hidden="true"></i> {% translate "Publish the plan" %}
+                        </button>
+                    </form>
+                </div>
+            </section>
+        {% endif %}
+        <div class="d-flex flex-wrap gap-3 small">
+            {% if period.state != "published" %}
+                <a href="{% url 'ephios_shift_coordination:plan' period.pk %}">
+                    <i class="fas fa-arrow-left"
+                       aria-hidden="true"></i> {% translate "Back to the planning view" %}
+                </a>
             {% endif %}
-            <form method="post"
-                  action="{% url 'ephios_shift_coordination:publish' period.pk %}">
-                {% csrf_token %}
-                {{ form.non_field_errors }}{{ form.expected_version }}{{ form.expected_version.errors }}{{ form.fingerprint }}{{ form.fingerprint.errors }}
-                {% if overrides %}{{ form.confirmed_tokens.as_field_group }}{% endif %}
-                {% if underfilled %}{{ form.confirm_underfilled.as_field_group }}{% endif %}
-                {{ form.confirm_publish.as_field_group }}
-                <p>{% translate "Publication creates confirmed ephios participations and one summary per assigned person through their notification settings." %}</p>
-                <button type="submit"
-                        class="btn btn-primary">{% translate "Publish saved plan" %}</button>
-            </form>
-        {% endif %}
-        {% if period.state != "published" %}
-            <p><a href="{% url 'ephios_shift_coordination:plan' period.pk %}">{% translate "Return to shared draft" %}</a></p>
-        {% endif %}
-        <p><a href="{{ period.get_absolute_url }}">{% translate "Responses and events" %}</a></p>
+            <a href="{{ period.get_absolute_url }}">
+                <i class="fas fa-poll"
+                   aria-hidden="true"></i> {% translate "Responses and services" %}
+            </a>
+        </div>
+        <script type="module" src="{% static 'ephios_shift_coordination/busy.js' %}"></script>
     {% endtimezone %}
 {% endblock %}

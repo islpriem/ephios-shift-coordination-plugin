@@ -284,8 +284,10 @@ def test_native_notifications_respect_preferences_and_suppress_obsolete_messages
     data = survey_data
     period = open_for(data, reminder_days=[5, 3])
     notice = Notification.objects.get(user=data.member)
-    assert notice.subject == SurveyInvitation.title
-    assert "Preferences are not assignments" in notice.body
+    assert notice.notification_type is SurveyInvitation
+    assert "Service planning" in notice.subject and "help" in notice.subject
+    assert "not an assignment yet" in notice.body
+    assert "personal maximum" in notice.body
     assert f"/surveys/{period.pk}/" in notice.get_actions()[0][1]
     assert not notice.is_obsolete
     data.member.disabled_notifications = [[EmailNotificationBackend.slug, SurveyInvitation.slug]]
@@ -365,7 +367,7 @@ def test_survey_views_keep_answers_private_and_readable_after_eligibility_loss(
     )
     client.force_login(data.member)
     data.member.qualification_grants.all().delete()
-    assert b"Currently no longer eligible" in client.get(url).content
+    assert b"do not meet the requirements" in client.get(url).content
     payload["expected_version"] = 1
     payload["notes"] = "A complete replacement"
     assert client.post(url, payload).status_code == 302
@@ -373,11 +375,11 @@ def test_survey_views_keep_answers_private_and_readable_after_eligibility_loss(
     assert response.version == 2 and response.notes == "A complete replacement"
     data.member.groups.clear()
     page = client.get(url)
-    assert page.status_code == 200 and b"Your response is read-only." in page.content
+    assert page.status_code == 200 and b"The survey is closed." in page.content
     assert client.post(url, {**payload, "expected_version": 2}).status_code == 403
     monkeypatch.setattr("django.utils.timezone.now", lambda: period.deadline)
     page = client.get(url)
-    assert b"Planning" in page.content and b"Your response is read-only." in page.content
+    assert b"Planning" in page.content and b"The survey is closed." in page.content
     assert client.post(url, {**payload, "expected_version": 2}).status_code == 409
 
 
@@ -443,7 +445,10 @@ def test_opening_form_can_save_config_and_open_only_once(survey_data, client):
     assert client.post(opening, payload).status_code == 302
     assert Notification.objects.count() == 2
     client.force_login(data.member)
-    assert b"Open your survey" in client.get(data.shifts[0].shift.event.get_absolute_url()).content
+    assert (
+        b"Enter your availability"
+        in client.get(data.shifts[0].shift.event.get_absolute_url()).content
+    )
     assert b"Response saved" not in client.get(data.period.get_absolute_url()).content
     assert client.get(data.period.get_absolute_url()).status_code == 403
 
@@ -488,3 +493,43 @@ def test_invitation_deadline_uses_the_period_timezone(survey_data):
     notice = Notification.objects.get(user=survey_data.member)
     local_deadline = timezone.localtime(period.deadline, ZoneInfo(period.timezone))
     assert date_format(local_deadline, "DATETIME_FORMAT") in notice.body
+
+
+def test_a_survey_can_be_closed_early_and_then_locks_answers(survey_data):
+    from ephios_shift_coordination.surveys import close_survey
+
+    data = survey_data
+    period = open_for(data)
+    response = period.responses.get(user=data.member)
+    with pytest.raises(PermissionDenied):
+        close_survey(data.member, period.pk, expected_version=period.version)
+    closed = close_survey(data.coordinator, period.pk, expected_version=period.version)
+    assert closed.state == closed.State.PLANNING
+    assert closed.deadline <= timezone.now() and closed.version == period.version + 1
+    with pytest.raises(Conflict):
+        save_response(data.member, period.pk, **answer(response))
+    with pytest.raises(Conflict):
+        close_survey(data.coordinator, period.pk, expected_version=closed.version)
+    process_surveys()
+    assert not NotificationDispatch.objects.filter(kind="reminder").exists()
+
+
+def test_closing_form_needs_confirmation_and_the_current_version(survey_data, client):
+    from django.urls import reverse
+
+    data = survey_data
+    period = open_for(data)
+    url = reverse("ephios_shift_coordination:survey_close", args=[period.pk])
+    client.force_login(data.member)
+    assert (
+        client.post(url, {"expected_version": period.version, "confirm_close": "on"}).status_code
+        == 403
+    )
+    client.force_login(data.coordinator)
+    assert client.get(url).status_code == 405
+    assert client.post(url, {"expected_version": period.version}).status_code == 200
+    assert client.post(url, {"expected_version": 1, "confirm_close": "on"}).status_code == 409
+    response = client.post(url, {"expected_version": period.version, "confirm_close": "on"})
+    assert response.status_code == 302
+    period.refresh_from_db()
+    assert period.state == period.State.PLANNING

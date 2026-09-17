@@ -184,7 +184,7 @@ def test_native_group_form_cannot_grant_planning_outside_admin_settings(planning
         {"dates": ["not-a-date"]},
         {"dates": []},
         {"reminder_days": "invalid"},
-        {"exclude_holidays": True, "region": ""},
+        {"weekdays": []},
         {"action": "create", "selection_ready": ""},
     ],
 )
@@ -236,6 +236,34 @@ def test_empty_reminders_can_be_saved(planning_data, client):
     assert PlanningSettings.objects.get().reminder_days == []
 
 
+def test_holiday_and_solver_values_come_from_the_planning_settings(planning_data, client):
+    data = planning_data
+    data.configuration.region = ""
+    data.configuration.save()
+    client.force_login(data.coordinator)
+    page = client.get(url("period_create"))
+    assert page.context["form"].fields["exclude_holidays"].disabled
+    assert "solver_seconds" not in page.context["form"].fields
+    payload = {
+        **data.configuration.snapshot(),
+        "template": data.template.pk,
+        "start_date": "2026-10-01",
+        "end_date": "2026-10-31",
+        "creation_key": str(uuid.uuid4()),
+        "reminder_days": "3",
+        "action": "create",
+        "selection_ready": "1",
+        "dates": ["2026-10-06"],
+        "exclude_holidays": True,
+        "solver_seconds": 99,
+        "region": "BE",
+    }
+    assert client.post(url("period_create"), payload).status_code == 302
+    rules = PlanningPeriod.objects.get().rules
+    assert rules["exclude_holidays"] is False and rules["region"] == ""
+    assert rules["solver_seconds"] == data.configuration.solver_seconds
+
+
 def test_event_information_and_deleted_event_preserve_period_record(planning_data, client):
     from ephios.core.models import Event
 
@@ -248,7 +276,7 @@ def test_event_information_and_deleted_event_preserve_period_record(planning_dat
     assert period.get_absolute_url().encode() in client.get(event.get_absolute_url()).content
     client.force_login(planning_data.member)
     response = client.get(event.get_absolute_url())
-    assert b"Planning period" in response.content
+    assert b"Shift coordination" in response.content
     assert period.get_absolute_url().encode() not in response.content
     client.force_login(planning_data.outsider)
     assert client.get(event.get_absolute_url()).status_code in (403, 404)
@@ -302,3 +330,18 @@ def test_foreign_shift_identifier_cannot_modify_another_template(planning_data, 
     assert response.status_code == 200
     assert response.context["shifts"].non_form_errors()
     assert ShiftTemplate.objects.get(pk=shift.pk).label == original_label
+
+
+def test_manually_created_events_stay_untouched(planning_data, client):
+    from ephios.core.models import Event
+
+    event = Event.objects.create(title="Members meeting", type=planning_data.template.event_type)
+    event.active = True
+    event.save()
+    from guardian.shortcuts import assign_perm
+
+    assign_perm("core.view_event", planning_data.group, event)
+    client.force_login(planning_data.member)
+    page = client.get(event.get_absolute_url())
+    assert page.status_code == 200
+    assert b"Shift coordination" not in page.content

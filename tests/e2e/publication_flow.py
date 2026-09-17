@@ -56,27 +56,29 @@ print(json.dumps({{'planned': [s.pk for s in shifts], 'native': [s.shift_id for 
         coordinator.get_by_role("button", name="Vorschlag berechnen", exact=True).click()
     result = calculation.value.json()
     assert result["status"] == "optimal_primary" and result["score"]["filled"] == 1
-    coordinator.get_by_role("button", name="Vorschlag übernehmen", exact=True).click()
+    coordinator.get_by_role("button", name="Diesen Vorschlag übernehmen", exact=True).click()
     expect(coordinator.locator("input[data-person]:checked")).to_have_count(2)
     card = coordinator.locator(f'[data-shift-card="{info["planned"][1]}"]')
-    card.get_by_label("Person für eine manuelle Ausnahme hinzufügen").select_option(
+    card.locator(".sc-candidates > summary").click()
+    card.get_by_label("Person hinzufügen, die diese Schicht nicht angeboten hat").select_option(
         str(info["users"]["4"])
     )
     card.get_by_role("button", name="Person hinzufügen", exact=True).click()
-    exception = coordinator.locator(".planning-exception")
-    expect(exception).to_have_count(1)
-    exception.get_by_label("Ich bestätige diese Ausnahme").check()
-    exception.get_by_label("Begründung für diese Ausnahme").fill("Telefonisch abgestimmt")
+    banner = coordinator.locator(".sc-banner")
+    # The person is one exception; the half staffed two-person shift is the second.
+    expect(banner.locator("li")).to_have_count(2)
+    banner.get_by_label("Ich bestätige diese Ausnahmen", exact=False).check()
+    banner.get_by_label("Gemeinsame Anmerkung für den Nachweis", exact=False).fill(
+        "Telefonisch abgestimmt"
+    )
     coordinator.get_by_role("button", name="Gemeinsamen Entwurf speichern", exact=True).click()
     expect(coordinator.locator("#draft-status")).to_have_text("Gemeinsamer Entwurf gespeichert")
-    coordinator.get_by_role(
-        "link", name="Gespeicherten Entwurf zur Veröffentlichung prüfen"
-    ).click()
-    expect(coordinator.get_by_text("Telefonisch abgestimmt", exact=True)).to_be_visible()
+    coordinator.get_by_role("link", name="Prüfen und veröffentlichen").click()
+    expect(coordinator.get_by_text("Telefonisch abgestimmt", exact=True).first).to_be_visible()
     other = browser.new_page(service_workers="block", locale="de-DE")
     from tests.e2e.test_planning import login
 
-    login(other, "demo-002@example.invalid", "demo-only-member-password")
+    login(other, "demo-002@example.invalid", "demo")
     review_url = f"{base}/shift-coordination/planning/{period_id}/publication/"
     other.goto(review_url)
     assert str(info["native"][0]) not in personal_feed(member, base)
@@ -90,23 +92,18 @@ print(json.dumps({{'planned': [s.pk for s in shifts], 'native': [s.shift_id for 
     )
     before_mail = {m["ID"] for m in mail_messages()}
     for page in (coordinator, other):
-        page.locator('[name="confirmed_tokens"]').check()
+        for token in page.locator('[name="confirmed_tokens"]').all():
+            token.check()
         page.get_by_label(
-            "Ich bestätige die Veröffentlichung mit den oben gezeigten fehlenden Mindestplätzen."
+            "Ich veröffentliche, obwohl in einigen Schichten Personen fehlen."
         ).check()
-        page.get_by_label(
-            "Ich bestätige die Veröffentlichung dieses gespeicherten gemeinsamen Entwurfs."
-        ).check()
+        page.get_by_label("Ich habe den Dienstplan geprüft", exact=False).check()
         with page.expect_navigation(wait_until="domcontentloaded"):
-            page.get_by_role(
-                "button", name="Gespeicherten Dienstplan veröffentlichen", exact=True
-            ).click()
+            page.get_by_role("button", name="Dienstplan veröffentlichen", exact=True).click()
         expect(
             page.get_by_role("heading", name="Veröffentlichter Dienstplan", exact=True)
         ).to_be_visible()
-        expect(
-            page.get_by_role("button", name="Gespeicherten Dienstplan veröffentlichen")
-        ).to_have_count(0)
+        expect(page.get_by_role("button", name="Dienstplan veröffentlichen")).to_have_count(0)
     saved_digest = app(f"""
 import hashlib, json
 from ephios.core.models import LocalParticipation
@@ -121,21 +118,27 @@ print(hashlib.sha256(json.dumps(period.publication_snapshot, sort_keys=True).enc
     summaries = [
         m
         for m in mail_messages()
-        if m["ID"] not in before_mail and m["Subject"] == "Dein veröffentlichter Dienstplan"
+        if m["ID"] not in before_mail
+        and m["Subject"].startswith("Dienstplan")
+        and m["Subject"].endswith("veröffentlicht")
     ]
     assert len(summaries) == 3
     assert {m["To"][0]["Address"] for m in summaries} == {
         "demo-003@example.invalid",
         "demo-004@example.invalid",
-        "demo-043@example.invalid",
+        "demo-023@example.invalid",
     }
     for message in summaries:
         with urlopen(
             f"http://127.0.0.1:{mail_port}/api/v1/message/{message['ID']}", timeout=10
         ) as response:
             body = json.load(response)["Text"]
-        assert "veröffentlichten Stand" in body and "/events/" in body
+        assert "veröffentlicht" in body and "/events/" in body
+        assert "Hallo Demoperson" in body
         assert "Nur für Koordination" not in body and "Telefonisch abgestimmt" not in body
+    member.reload()
+    expect(member.get_by_text("Deine Schichten im veröffentlichten Dienstplan")).to_be_visible()
+    expect(member.get_by_role("link", name="Ersatz finden").first).to_be_visible()
     first_feed = personal_feed(member, base)
     assert str(info["native"][0]) in first_feed
     assert str(first_feed[str(info["native"][0])]["STATUS"]) == "CONFIRMED"
@@ -174,8 +177,10 @@ print(hashlib.sha256(json.dumps(period.publication_snapshot, sort_keys=True).enc
     )
     assert str(info["native"][0]) not in personal_feed(member, base)
     replacement = browser.new_page(service_workers="block", locale="de-DE")
-    login(replacement, "demo-007@example.invalid", "demo-only-member-password")
+    login(replacement, "demo-007@example.invalid", "demo")
     assert str(info["native"][0]) in personal_feed(replacement, base)
+    # After the native rebooking the member has no shift in this period any more.
     member.reload()
-    expect(member.get_by_text("Die Planung ist abgeschlossen.", exact=False)).to_be_visible()
+    expect(member.get_by_text("Deine Schichten im veröffentlichten Dienstplan")).to_have_count(0)
+    expect(member.get_by_text("Die Umfrage ist geschlossen.", exact=False)).to_be_visible()
     coordinator.screenshot(path=".local/test-results/published-plan-drift-de.png", full_page=True)

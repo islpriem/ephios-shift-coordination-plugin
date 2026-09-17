@@ -1,0 +1,14 @@
+{% load i18n %}
+{% if period.effective_state == "preparation" %}
+    <span class="badge text-bg-secondary"><i class="fas fa-drafting-compass"
+   aria-hidden="true"></i> {% translate "Preparation" %}</span>
+{% elif period.effective_state == "survey_open" %}
+    <span class="badge text-bg-primary"><i class="fas fa-poll"
+   aria-hidden="true"></i> {% translate "Survey running" %}</span>
+{% elif period.effective_state == "planning" %}
+    <span class="badge text-bg-warning"><i class="fas fa-user-check"
+   aria-hidden="true"></i> {% translate "Planning" %}</span>
+{% else %}
+    <span class="badge text-bg-success"><i class="fas fa-check-circle"
+   aria-hidden="true"></i> {% translate "Published" %}</span>
+{% endif %}

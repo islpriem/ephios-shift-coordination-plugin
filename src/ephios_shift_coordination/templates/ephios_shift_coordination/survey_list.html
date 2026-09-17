@@ -1,23 +1,44 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n static %}
 {% block title %}
     {% translate "Surveys" %}
 {% endblock %}
 {% block content %}
-    <h1>{% translate "Surveys" %}</h1>
-    <ul>
+    <link rel="stylesheet"
+          href="{% static 'ephios_shift_coordination/planning.css' %}">
+    <h1 class="mb-1">{% translate "Your availability surveys" %}</h1>
+    <p class="text-body-secondary">
+        {% translate "Tell the coordinators when you can take a shift. You are only scheduled once a plan is published." %}
+    </p>
+    <div class="list-group sc-periods">
         {% for response in responses %}
-            <li>
-                <a href="{{ response.get_absolute_url }}">{{ response.period.start_date }} – {{ response.period.end_date }}</a>
-                · {{ response.period.effective_state_label }} ·
-                {% if response.submitted_at %}
-                    {% translate "Response saved" %}
-                {% else %}
-                    {% translate "Awaiting response" %}
-                {% endif %}
-            </li>
+            <a class="list-group-item list-group-item-action"
+               href="{{ response.get_absolute_url }}">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <span class="fw-semibold">{{ response.period.template_snapshot.title }}</span>
+                    {% if response.period.state == "published" %}
+                        <span class="badge text-bg-success"><i class="fas fa-check-circle" aria-hidden="true"></i> {% translate "Plan published" %}</span>
+                    {% elif response.period.effective_state != "survey_open" %}
+                        <span class="badge text-bg-secondary"><i class="fas fa-lock" aria-hidden="true"></i> {% translate "Survey closed" %}</span>
+                    {% elif response.submitted_at %}
+                        <span class="badge text-bg-success"><i class="fas fa-check" aria-hidden="true"></i> {% translate "Answer saved" %}</span>
+                    {% else %}
+                        <span class="badge text-bg-warning"><i class="fas fa-exclamation" aria-hidden="true"></i> {% translate "Answer missing" %}</span>
+                    {% endif %}
+                </div>
+                <div class="text-body-secondary small">
+                    <i class="far fa-calendar" aria-hidden="true"></i>
+                    {{ response.period.start_date|date:"SHORT_DATE_FORMAT" }} – {{ response.period.end_date|date:"SHORT_DATE_FORMAT" }}
+                    {% if response.period.effective_state == "survey_open" %}
+                        · <i class="far fa-clock" aria-hidden="true"></i>
+                        {% blocktranslate with deadline=response.period.deadline|date:"SHORT_DATETIME_FORMAT" %}until {{ deadline }}{% endblocktranslate %}
+                    {% endif %}
+                </div>
+            </a>
         {% empty %}
-            <li>{% translate "There are no surveys available yet." %}</li>
+            <div class="list-group-item text-body-secondary">
+                {% translate "You have not been invited to a survey yet. You will get a message when a new plan is prepared." %}
+            </div>
         {% endfor %}
-    </ul>
+    </div>
 {% endblock %}

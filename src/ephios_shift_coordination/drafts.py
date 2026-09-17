@@ -39,6 +39,9 @@ RULE_LABELS = {
     "consecutive_days": gettext_lazy("Services on consecutive days"),
     "overlap": gettext_lazy("Overlapping services of the same event type"),
     "shift_maximum": gettext_lazy("Shift maximum exceeded"),
+    "observer_wish": gettext_lazy("No offer to sit in on this service"),
+    "regular_minimum": gettext_lazy("Too few regular people besides those sitting in"),
+    "shift_incomplete": gettext_lazy("Partly staffed: this service cannot take place"),
 }
 
 
@@ -58,10 +61,11 @@ def snapshot(user, period_id, *, lock=False):
     user = UserProfile.objects.filter(pk=user.pk).first()
     if not user or not enabled() or not can_plan(user):
         raise PermissionDenied
-    if period.effective_state != PlanningPeriod.State.PLANNING:
-        raise Conflict(
-            _("Planning is available only after the response deadline and before publication.")
-        )
+    if period.effective_state not in (
+        PlanningPeriod.State.SURVEY_OPEN,
+        PlanningPeriod.State.PLANNING,
+    ):
+        raise Conflict(_("Planning is available from the open survey until publication."))
     users = UserProfile.objects.filter(is_active=True).order_by("pk")
     if lock:
         users = users.select_for_update()
@@ -98,9 +102,14 @@ def snapshot(user, period_id, *, lock=False):
     zone = ZoneInfo(period.timezone)
     targets = Event.objects.filter(pk__in=[link.event.event_id for link in planned])
     responses = {
-        r.user_id: r for r in period.responses.prefetch_related("availabilities", "offered_shifts")
+        r.user_id: r
+        for r in period.responses.prefetch_related(
+            "availabilities", "offered_shifts", "observer_events"
+        )
     }
+    allow_observers = bool(period.rules.get("allow_observers"))
     people, presentation, availability, grants, allowed = [], [], [], [], set()
+    observers = []
     included_cache = {}
     for person in users:
         visible = set(
@@ -117,6 +126,11 @@ def snapshot(user, period_id, *, lock=False):
             else {}
         )
         offered = {s.pk for s in response.offered_shifts.all()} if response else set()
+        wished = (
+            {link.pk for link in response.observer_events.all()}
+            if response and allow_observers
+            else set()
+        )
         complete = bool(
             response
             and response.submitted_at
@@ -146,6 +160,8 @@ def snapshot(user, period_id, *, lock=False):
             if native.event_id not in visible:
                 continue
             allowed.add((person.pk, link.pk))
+            if link.event_id in wished:
+                observers.append(rules.Observer(person.pk, link.pk))
             valid = tuple(
                 sorted(
                     g.qualification_id
@@ -223,12 +239,15 @@ def snapshot(user, period_id, *, lock=False):
             **{
                 key: period.rules[key]
                 for key in ("weekly_limit", "free_next_day", "solver_seconds")
-            }
+            },
+            minimum_regular=period.rules.get("minimum_regular", 1),
+            allow_observers=allow_observers,
         ),
         shifts,
         tuple(people),
         tuple(availability),
         commitments,
+        observers=tuple(observers),
     )
     fingerprint = rules.fingerprint(
         {"data": asdict(data), "grants": grants, "allowed": sorted(allowed)}
@@ -277,21 +296,32 @@ def public_result(result):
 @transaction.atomic
 def load_plan(user, period_id):
     current = snapshot(user, period_id)
-    assignments = list(
+    saved = list(
         current.period.draft_assignments.order_by(
             "original_user_id", "planned_shift_id"
-        ).values_list("original_user_id", "planned_shift_id")
+        ).values_list("original_user_id", "planned_shift_id", "observer")
     )
-    valid = [pair for pair in assignments if pair in current.allowed]
-    result = rules.validate(current.data, valid)
+    assignments = [(uid, sid) for uid, sid, observer in saved if not observer]
+    sitting = [(uid, sid) for uid, sid, observer in saved if observer]
+    result = rules.validate(
+        current.data,
+        [pair for pair in assignments if pair in current.allowed],
+        [pair for pair in sitting if pair in current.allowed],
+    )
     return {
         "version": current.period.version,
         "fingerprint": current.fingerprint,
         "assignments": [list(pair) for pair in assignments],
-        "invalid_assignments": [list(pair) for pair in assignments if pair not in current.allowed],
+        "observer_assignments": [list(pair) for pair in sitting],
+        "invalid_assignments": [
+            list(pair) for pair in assignments + sitting if pair not in current.allowed
+        ],
         "people": current.people,
         "shifts": current.shifts,
         "availability": [asdict(a) for a in current.data.availability],
+        "observers": [[o.person_id, o.shift_id] for o in current.data.observers],
+        "allow_observers": bool(current.period.rules.get("allow_observers")),
+        "survey_open": current.period.effective_state == PlanningPeriod.State.SURVEY_OPEN,
         "ratings": {key: str(label) for key, label in Availability.Rating.choices},
         **public_result(result),
     }
@@ -306,49 +336,57 @@ def check_basis(current, expected_version, fingerprint):
         raise Conflict(_("The draft or its inputs have changed. Reload before continuing."))
 
 
-def checked(current, expected_version, fingerprint, assignments):
+def pair_list(value):
+    return isinstance(value, list) and all(
+        isinstance(pair, list) and len(pair) == 2 and all(type(item) is int for item in pair)
+        for pair in value
+    )
+
+
+def checked(current, expected_version, fingerprint, assignments, observers=()):
     check_basis(current, expected_version, fingerprint)
-    if not isinstance(assignments, list) or any(
-        not isinstance(pair, list)
-        or len(pair) != 2
-        or any(type(value) is not int for value in pair)
-        for pair in assignments
-    ):
+    if not pair_list(assignments) or not pair_list(list(observers)):
         raise ValidationError(_("Invalid assignment selection."))
     pairs = [tuple(pair) for pair in assignments]
-    if any(pair not in current.allowed for pair in pairs):
+    sitting = [tuple(pair) for pair in observers]
+    if any(pair not in current.allowed for pair in pairs + sitting):
         raise ValidationError(
             _(
                 "A selected person or shift is unavailable or lacks event access. "
                 "Remove that assignment."
             )
         )
+    if sitting and not current.period.rules.get("allow_observers"):
+        raise ValidationError(_("Sitting in is switched off for this period."))
     try:
-        return rules.validate(current.data, pairs)
+        return rules.validate(current.data, pairs, sitting)
     except ValueError as exc:
         raise ValidationError(_("Invalid assignment selection.")) from exc
 
 
 @transaction.atomic
-def validate_draft(user, period_id, *, expected_version, fingerprint, assignments):
+def validate_draft(user, period_id, *, expected_version, fingerprint, assignments, observers=()):
     current = snapshot(user, period_id)
-    return public_result(checked(current, expected_version, fingerprint, assignments))
+    return public_result(checked(current, expected_version, fingerprint, assignments, observers))
 
 
 @transaction.atomic
-def save_draft(user, period_id, *, expected_version, fingerprint, assignments, confirmations):
+def save_draft(
+    user, period_id, *, expected_version, fingerprint, assignments, confirmations, observers=()
+):
     current = snapshot(user, period_id, lock=True)
-    result = checked(current, expected_version, fingerprint, assignments)
+    result = checked(current, expected_version, fingerprint, assignments, observers)
+    # Exceptions are confirmed together; the shared note is recorded with each of them.
     if not isinstance(confirmations, list) or any(
         not isinstance(item, dict)
         or not isinstance(item.get("token"), str)
         or item.get("confirmed") is not True
         or not isinstance(item.get("reason"), str)
-        or not 1 <= len(item["reason"].strip()) <= 2000
+        or len(item["reason"].strip()) > 2000
         for item in confirmations
     ):
         raise ValidationError(
-            _("Explicitly confirm every exception and provide a reason of at most 2000 characters.")
+            _("Confirm the exceptions explicitly; a note may have at most 2000 characters.")
         )
     by_token = {item["token"]: item["reason"].strip() for item in confirmations}
     if len(by_token) != len(confirmations) or set(by_token) != {v.token for v in result.violations}:
@@ -357,14 +395,22 @@ def save_draft(user, period_id, *, expected_version, fingerprint, assignments, c
         )
     period = current.period
     period.version += 1
-    period.state = PlanningPeriod.State.PLANNING
+    # An early draft during the open survey must not close it.
+    period.state = period.effective_state
     period.draft_fingerprint = current.fingerprint
     period.save(update_fields=["version", "state", "draft_fingerprint"])
     period.draft_assignments.all().delete()
     DraftAssignment.objects.bulk_create(
         [
-            DraftAssignment(period=period, planned_shift_id=sid, user_id=uid, original_user_id=uid)
-            for uid, sid in assignments
+            DraftAssignment(
+                period=period,
+                planned_shift_id=sid,
+                user_id=uid,
+                original_user_id=uid,
+                observer=observer,
+            )
+            for entries, observer in ((assignments, False), (observers, True))
+            for uid, sid in entries
         ]
     )
     RuleOverride.objects.bulk_create(

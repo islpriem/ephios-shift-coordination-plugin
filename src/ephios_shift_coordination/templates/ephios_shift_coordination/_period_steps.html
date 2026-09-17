@@ -1,0 +1,20 @@
+{% load i18n %}
+<ol class="sc-steps"
+    aria-label="{% translate 'Progress of this planning period' %}">
+    <li class="{% if period.effective_state == 'preparation' %}sc-current{% else %}sc-done{% endif %}">
+        <span class="sc-step-number">1</span>
+        <span>{% translate "Services created" %}</span>
+    </li>
+    <li class="{% if period.effective_state == 'survey_open' %}sc-current{% elif period.opened_at %}sc-done{% endif %}">
+        <span class="sc-step-number">2</span>
+        <span>{% translate "Survey" %}</span>
+    </li>
+    <li class="{% if period.effective_state == 'planning' %}sc-current{% elif period.state == 'published' %}sc-done{% endif %}">
+        <span class="sc-step-number">3</span>
+        <span>{% translate "Plan services" %}</span>
+    </li>
+    <li class="{% if period.state == 'published' %}sc-current{% endif %}">
+        <span class="sc-step-number">4</span>
+        <span>{% translate "Published" %}</span>
+    </li>
+</ol>

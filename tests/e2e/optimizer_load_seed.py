@@ -13,7 +13,7 @@ from django.contrib.auth.models import Group
 from django.db import connection, transaction
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
-from ephios.core.models import EventType, Qualification, UserProfile
+from ephios.core.models import EventType, Qualification, QualificationGrant, UserProfile
 
 from ephios_shift_coordination.drafts import snapshot
 from ephios_shift_coordination.ephios_integration import check_structure
@@ -31,6 +31,28 @@ from ephios_shift_coordination.services import create_period
 def load_fixture(period_id=None, scarce=False):
     assert os.environ.get("EPHIOS_TESTING") == "1"
     coordinator = UserProfile.objects.get(email="demo-001@example.invalid")
+    # The agreed load case is 100 people; the demo import itself stays deliberately small.
+    members = Group.objects.get(name="Demo members")
+    skills = [
+        Qualification.objects.get(
+            uuid=uuid.uuid5(uuid.NAMESPACE_DNS, f"demo-skill-{index}.example.invalid")
+        )
+        for index in (1, 2)
+    ]
+    for index in range(1, 101):
+        person, created = UserProfile.all_objects.get_or_create(
+            email=f"demo-{index:03}@example.invalid",
+            defaults={
+                "display_name": f"Demoperson {index:03}",
+                "date_of_birth": date(1990, 1, 1),
+                "is_active": True,
+                "preferred_language": "de",
+            },
+        )
+        if created:
+            person.groups.add(members)
+            for skill in skills if index % 5 == 0 else [skills[(index - 1) % 2]]:
+                QualificationGrant.objects.get_or_create(user=person, qualification=skill)
     if period_id is None:
         template = ServiceTemplate.objects.create(
             title=f"Load fixture {uuid.uuid4()}",
@@ -133,6 +155,8 @@ def load_fixture(period_id=None, scarce=False):
         ]
     )
     started = monotonic()
+    # The query log is capped, so building the fixture would make the measurement meaningless.
+    connection.queries_log.clear()
     with CaptureQueriesContext(connection) as queries, transaction.atomic():
         measured = snapshot(coordinator, period.pk)
     query_seconds = monotonic() - started

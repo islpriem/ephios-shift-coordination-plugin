@@ -1,9 +1,12 @@
 import json
+from collections import Counter
 from datetime import timedelta
 
 from django.conf import settings
+from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -13,19 +16,37 @@ from django.views.decorators.http import require_http_methods
 from .access import require_access
 from .dates import calendar_days
 from .drafts import RULE_LABELS, load_plan, save_draft, validate_draft
-from .ephios_integration import eligible
+from .ephios_integration import eligibility, period_shifts
 from .forms import (
     PeriodForm,
     ServiceTemplateForm,
     SettingsForm,
     ShiftFormSet,
+    StaffingForm,
+    SurveyClosingForm,
     SurveyOpeningForm,
     SurveyResponseForm,
 )
-from .models import PlanningPeriod, PlanningSettings, ServiceTemplate, SurveyResponse
+from .models import (
+    Availability,
+    PlannedShift,
+    PlanningPeriod,
+    PlanningSettings,
+    ServiceTemplate,
+    SurveyResponse,
+)
 from .proposals import create_proposal
 from .services import Conflict, create_period, preview_template
-from .surveys import open_survey, save_response
+from .staffing import (
+    add_person,
+    options,
+    remove_person,
+    replacement_access,
+    replacements,
+    service,
+    service_shifts,
+)
+from .surveys import capacity_preview, close_survey, open_survey, recommendation, save_response
 
 
 @require_access()
@@ -64,7 +85,9 @@ def draft_request(request, pk, *, save=False):
         expected = {"expected_version", "fingerprint", "assignments"}
         if save:
             expected.add("confirmations")
-        if not isinstance(payload, dict) or set(payload) != expected:
+        if not isinstance(payload, dict) or not expected <= set(payload) <= expected | {
+            "observers"
+        }:
             raise ValidationError(_("Invalid draft request."))
         result = (save_draft if save else validate_draft)(request.user, pk, **payload)
         return JsonResponse(result)
@@ -110,6 +133,7 @@ def configuration(request):
     form = SettingsForm(request.POST or None, instance=instance)
     if request.method == "POST" and form.is_valid():
         form.save()
+        messages.success(request, _("The planning settings have been saved."))
         return redirect("ephios_shift_coordination:settings")
     return render(request, "ephios_shift_coordination/settings.html", {"form": form})
 
@@ -140,6 +164,7 @@ def template_edit(request, pk=None):
         for position, shift_form in enumerate(shifts.forms):
             shift_form.instance.position = position
         shifts.save()
+        messages.success(request, _("The service template has been saved."))
         return redirect("ephios_shift_coordination:template_list")
     return render(
         request, "ephios_shift_coordination/template_form.html", {"form": form, "shifts": shifts}
@@ -152,7 +177,16 @@ def period_list(request):
     return render(
         request,
         "ephios_shift_coordination/period_list.html",
-        {"periods": PlanningPeriod.objects.all()},
+        {
+            "periods": PlanningPeriod.objects.annotate(
+                invited=Count("responses", distinct=True),
+                answered=Count(
+                    "responses",
+                    filter=Q(responses__submitted_at__isnull=False),
+                    distinct=True,
+                ),
+            )
+        },
     )
 
 
@@ -160,18 +194,20 @@ def period_list(request):
 @require_http_methods(["GET", "POST"])
 def period_create(request):
     configuration, _created = PlanningSettings.objects.get_or_create(pk=1)
-    form = PeriodForm(request.POST or None, initial=configuration.snapshot())
+    defaults = configuration.snapshot()
+    form = PeriodForm(request.POST or None, initial=defaults, defaults=defaults)
     context = {"form": form}
     status = 200
     if request.method == "POST" and form.is_valid():
         values = form.cleaned_data
+        rules = form.rules()
         try:
             days = calendar_days(
                 values["start_date"],
                 values["end_date"],
                 values["weekdays"],
-                values["country"],
-                values["region"],
+                rules["country"],
+                rules["region"],
                 values["exclude_holidays"],
             )
             if request.POST.get("selection_ready") and request.POST.get("action") != "calendar":
@@ -191,11 +227,16 @@ def period_create(request):
                     start_date=values["start_date"],
                     end_date=values["end_date"],
                     dates=selected,
-                    rules=form.rules(),
+                    rules=rules,
                     creation_key=values["creation_key"],
                 )
+                messages.success(
+                    request,
+                    _("{count} services have been created.").format(count=len(selected)),
+                )
                 return redirect(period)
-            context["preview"] = preview_template(values["template"], selected, settings.TIME_ZONE)
+            preview = preview_template(values["template"], selected, settings.TIME_ZONE)
+            context.update(preview=preview, shifts=preview[0]["shifts"] if preview else [])
         except ValidationError as exc:
             form.add_error(None, ValidationError(exc.messages))
         except Conflict as exc:
@@ -213,10 +254,38 @@ def period_detail(request, pk):
     return render_period(request, period)
 
 
-def render_period(request, period, form=None, status=200):
+def response_rows(period):
+    """Coordinator overview of the frozen cohort and what it answered."""
+    responses = list(
+        period.responses.select_related("user").prefetch_related(
+            "availabilities", "offered_shifts", "observer_events"
+        )
+    )
+    shifts = period_shifts(period)
+    cohort = eligibility([response.user for response in responses], shifts)
+    for response in responses:
+        offered = list(response.offered_shifts.all())
+        current = {planned.pk for planned in cohort[response.user_id][1]}
+        response.eligibility_warnings = [
+            planned.snapshot["label"] for planned in offered if planned.pk not in current
+        ]
+        # A plain list keeps the scale order and avoids Counter's zero default in templates.
+        counts = Counter(a.rating for a in response.availabilities.all())
+        response.ratings = [
+            (value, counts[value]) for value, _label in Availability.Rating.choices if counts[value]
+        ]
+        response.offered_count = len(offered)
+        response.observer_count = len(response.observer_events.all())
+    return sorted(
+        responses, key=lambda response: (response.submitted_at is None, str(response.user))
+    )
+
+
+def render_period(request, period, form=None, status=200, closing=None):
     events = [
         {
             "date": link.date,
+            "link": link,
             "missing": link.event is None,
             "event": link.event
             if link.event and request.user.has_perm("core.view_event", link.event)
@@ -224,29 +293,39 @@ def render_period(request, period, form=None, status=200):
         }
         for link in period.events.all()
     ]
+    responses = response_rows(period)
+    capacity = None
     if form is None:
+        if period.state == PlanningPeriod.State.PREPARATION:
+            capacity = capacity_preview(period, period.suggestion.get("maximum"))
         form = SurveyOpeningForm(
+            hint=_("Calculated for the current members: {sentence}").format(
+                sentence=recommendation(capacity)
+            )
+            if capacity and recommendation(capacity)
+            else "",
             initial={
                 "expected_version": period.version,
                 "deadline": period.deadline
                 or timezone.now() + timedelta(days=period.rules["response_days"]),
                 "reminder_days": ", ".join(map(str, period.rules["reminder_days"])),
-            }
+                "maximum": period.suggestion.get("maximum")
+                or (capacity["maximum"] if capacity else None),
+            },
         )
-    responses = []
-    for response in period.responses.select_related("user").prefetch_related(
-        "availabilities__planned_shift"
-    ):
-        response.eligibility_warnings = [
-            shift.snapshot["label"]
-            for shift in response.offered_shifts.select_related("shift__event__type")
-            if not eligible(response.user, shift)
-        ]
-        responses.append(response)
     return render(
         request,
         "ephios_shift_coordination/period_detail.html",
-        {"period": period, "events": events, "form": form, "responses": responses},
+        {
+            "period": period,
+            "events": events,
+            "form": form,
+            "closing": closing or SurveyClosingForm(initial={"expected_version": period.version}),
+            "capacity": capacity,
+            "recommendation": recommendation(period.suggestion),
+            "responses": responses,
+            "answered": sum(1 for response in responses if response.submitted_at),
+        },
         status=status,
     )
 
@@ -273,11 +352,13 @@ def survey_open(request, pk):
     status = 200
     if form.is_valid():
         try:
-            open_survey(
-                request.user,
-                pk,
-                **form.cleaned_data,
-                open_now=request.POST.get("action") != "save_settings",
+            open_now = request.POST.get("action") != "save_settings"
+            open_survey(request.user, pk, **form.cleaned_data, open_now=open_now)
+            messages.success(
+                request,
+                _("The survey is open and the invitations are on their way.")
+                if open_now
+                else _("The survey settings have been saved."),
             )
             return redirect(period)
         except (Conflict, ValidationError) as exc:
@@ -286,6 +367,25 @@ def survey_open(request, pk):
             )
             status = 409 if isinstance(exc, Conflict) else 200
     return render_period(request, period, form, status)
+
+
+@require_access()
+@require_http_methods(["POST"])
+def survey_close(request, pk):
+    period = get_object_or_404(PlanningPeriod, pk=pk)
+    form = SurveyClosingForm(request.POST)
+    status = 200
+    if form.is_valid():
+        try:
+            close_survey(request.user, pk, expected_version=form.cleaned_data["expected_version"])
+            messages.success(request, _("The survey is closed. You can finish the plan now."))
+            return redirect("ephios_shift_coordination:plan", pk=pk)
+        except (Conflict, ValidationError) as exc:
+            form.add_error(
+                None, str(exc) if isinstance(exc, Conflict) else ValidationError(exc.messages)
+            )
+            status = 409 if isinstance(exc, Conflict) else 200
+    return render_period(request, period, status=status, closing=form)
 
 
 @require_access("member")
@@ -301,13 +401,13 @@ def survey_detail(request, pk):
             save_response(
                 request.user,
                 pk,
-                **{
-                    "expected_version": form.cleaned_data["expected_version"],
-                    "maximum": form.cleaned_data["maximum"],
-                    "notes": form.cleaned_data["notes"],
-                    "ratings": form.ratings(),
-                },
+                expected_version=form.cleaned_data["expected_version"],
+                maximum=form.cleaned_data["maximum"],
+                notes=form.cleaned_data["notes"],
+                ratings=form.ratings(),
+                observer_events=form.observer_events(),
             )
+            messages.success(request, _("Thank you, your answer has been saved."))
             return redirect(response)
         except (Conflict, ValidationError) as exc:
             form.add_error(
@@ -326,9 +426,30 @@ def survey_detail(request, pk):
     return render(
         request,
         "ephios_shift_coordination/survey_detail.html",
-        {"response": response, "form": form, "writable": writable},
+        {
+            "response": response,
+            "form": form,
+            "writable": writable,
+            "recommendation": recommendation(response.period.suggestion),
+            "services": own_services(request.user, response.period),
+        },
         status=status,
     )
+
+
+def own_services(user, period):
+    """Published shifts of this member, with the replacement page to find cover."""
+    if period.state != PlanningPeriod.State.PUBLISHED:
+        return []
+    rows = []
+    for link in period.events.select_related("event").order_by("date"):
+        if link.event is None or not user.has_perm("core.view_event", link.event):
+            continue
+        for planned in service_shifts(link):
+            state = options(user, planned)
+            if state["mine"]:
+                rows.append({"planned": planned, "state": state, "link": link})
+    return rows
 
 
 def publication_context(user, pk):
@@ -386,8 +507,68 @@ def publish(request, pk):
             )
         if form.is_valid():
             publish_plan(request.user, pk, **form.cleaned_data)
+            messages.success(request, _("The plan is published and everybody staffed is informed."))
             return redirect("ephios_shift_coordination:publication", pk=pk)
     except (Conflict, ValidationError) as exc:
         context["error"] = str(exc) if isinstance(exc, Conflict) else " ".join(exc.messages)
         status = 409 if isinstance(exc, Conflict) else 400
     return render(request, "ephios_shift_coordination/publication.html", context, status=status)
+
+
+@require_access("member")
+@require_http_methods(["GET"])
+def replacement(request, pk):
+    planned_event = service(pk)
+    try:
+        coordinator = replacement_access(request.user, planned_event)
+    except Conflict as exc:
+        return render(
+            request,
+            "ephios_shift_coordination/replacement.html",
+            {"service": planned_event, "error": str(exc)},
+            status=409,
+        )
+    shifts = [
+        {**row, "options": options(request.user, row["planned"])}
+        for row in replacements(planned_event, coordinator)
+    ]
+    return render(
+        request,
+        "ephios_shift_coordination/replacement.html",
+        {
+            "service": planned_event,
+            "period": planned_event.period,
+            "shifts": shifts,
+            "coordinator": coordinator,
+        },
+    )
+
+
+@require_access("member")
+@require_http_methods(["POST"])
+def staffing_action(request, pk):
+    planned = get_object_or_404(PlannedShift.objects.select_related("event"), pk=pk)
+    form = StaffingForm(request.POST)
+    if form.is_valid():
+        action = form.cleaned_data["action"]
+        try:
+            if action == "leave":
+                remove_person(request.user, pk, user_id=form.cleaned_data["user_id"])
+                messages.success(request, _("The shift has been updated. Thanks for telling us."))
+            else:
+                add_person(
+                    request.user,
+                    pk,
+                    user_id=form.cleaned_data["user_id"],
+                    observer=action == "observe",
+                )
+                messages.success(request, _("The shift has been updated. Thanks for helping out."))
+        except (Conflict, ValidationError) as exc:
+            messages.error(
+                request, str(exc) if isinstance(exc, Conflict) else " ".join(exc.messages)
+            )
+    else:
+        messages.error(request, _("This request was incomplete. Please try again."))
+    if request.POST.get("next") == "event" and planned.event.event_id:
+        return redirect(planned.event.event.get_absolute_url())
+    return redirect("ephios_shift_coordination:replacement", pk=planned.event_id)

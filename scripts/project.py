@@ -56,7 +56,10 @@ def up():
     print(f"Local ephios: http://127.0.0.1:{os.environ.get('EPHIOS_HTTP_PORT', '8097')}")
 
 
-def import_demo(no_admin=False):
+def import_demo(no_admin=False, reset=False):
+    if reset:
+        print("Deleting the development stack data before importing the demo.")
+        reset_data(os.environ.get("EPHIOS_STACK", "development"))
     up()
     compose(
         "exec",
@@ -67,7 +70,7 @@ def import_demo(no_admin=False):
         "-c",
         (ROOT / "scripts/demo.py").read_text() + "\nseed_demo()",
     )
-    print("100 demo members and the Dienst template are available.")
+    print("Demo members, the Dienst template and four planning periods are available.")
     if not no_admin:
         compose("exec", "app", "ephios", "createsuperuser")
 
@@ -97,8 +100,25 @@ def e2e():
         run_e2e()
 
 
+def reset_data(stack):
+    """Throw away a stack's database and files so the next start begins empty."""
+    if os.environ.get("EPHIOS_STACK", "development") != stack:
+        raise SystemExit("Refusing to reset a stack that is not selected.")
+    root = ROOT / ".local/data" / stack
+    if not root.resolve().is_relative_to(ROOT) or root.resolve() == ROOT.resolve():
+        raise SystemExit("Container data must stay in the workspace.")
+    compose("down", "--volumes")
+    shutil.rmtree(root, ignore_errors=True)
+
+
+def reset_test_data():
+    """Kept data from earlier runs distorts every measurement, so each run starts empty."""
+    reset_data("test")
+
+
 def run_e2e():
     try:
+        reset_test_data()
         up()
         compose(
             "exec",
@@ -199,6 +219,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Import demo data without interactive administrator creation.",
     )
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="Delete this stack's data before importing, so the demo starts from scratch.",
+    )
     arguments = parser.parse_args()
     command = arguments.command
     actions = {
@@ -208,6 +233,6 @@ if __name__ == "__main__":
         "down": lambda: compose("down"),
         "e2e": e2e,
         "check": check,
-        "import-demo": lambda: import_demo(no_admin=arguments.no_admin),
+        "import-demo": lambda: import_demo(no_admin=arguments.no_admin, reset=arguments.reset),
     }
     actions[command]()

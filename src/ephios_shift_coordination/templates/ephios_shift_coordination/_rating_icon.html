@@ -1,0 +1,9 @@
+{% if value == "unavailable" %}
+    <i class="fas fa-times" aria-hidden="true"></i>
+{% elif value == "if_needed" %}
+    <i class="fas fa-exclamation" aria-hidden="true"></i>
+{% elif value == "available" %}
+    <i class="fas fa-check" aria-hidden="true"></i>
+{% else %}
+    <i class="fas fa-star" aria-hidden="true"></i>
+{% endif %}

@@ -17,8 +17,10 @@ from tests.test_drafts import native_commitment, payload
 from tests.test_surveys import survey_data as survey_data
 
 
-def prepare(data, assignments=None):
+def prepare(data, assignments=None, observers=()):
     body = payload(data, assignments)
+    if observers:
+        body["observers"] = list(observers)
     checks = validate_draft(data.coordinator, data.period.pk, **body)
     saved = save_draft(
         data.coordinator,
@@ -78,6 +80,17 @@ def test_publication_creates_native_participations_once_and_uses_existing_person
         LocalParticipation.objects.values_list("start_time", flat=True)
     )
     assert not load_publication(data.coordinator, data.period.pk)["changed"]
+
+
+def test_preview_counts_only_shifts_that_really_reached_their_minimum(draft_data):
+    data = draft_data
+    prepare(data, [])
+    empty = review_publication(data.coordinator, data.period.pk)
+    assert empty["filled"] == 0 and empty["total"] == len(empty["rows"]) > 1
+    # Empty shifts are underfilled too: counting them against the staffed ones went negative.
+    prepare(data, [[data.member.pk, data.shifts[0].pk]])
+    partial = review_publication(data.coordinator, data.period.pk)
+    assert partial["filled"] == 1 and partial["total"] == empty["total"]
 
 
 def test_exception_and_understaffing_must_be_explicitly_reconfirmed(draft_data):
@@ -173,10 +186,10 @@ def test_publication_summary_uses_native_channels_and_current_partner_visibility
     body = str(notification.body)
     assert "coordinator" in body and "published" in body
     assert "private answer" not in body and "Explicit agreement" not in body
-    assert data.member.calendar_token not in str(notification.get_actions())
-    assert any(
-        reverse("core:settings_calendar") in url for label, url in notification.get_actions()
-    )
+    assert data.member.calendar_token not in body
+    # A summary covers several services, so the links live in the text instead of a button.
+    assert not notification.get_actions()
+    assert reverse("core:settings_calendar") in body
     with pytest.MonkeyPatch.context() as patch:
         sent = []
         patch.setattr(EmailNotificationBackend, "send", sent.append)

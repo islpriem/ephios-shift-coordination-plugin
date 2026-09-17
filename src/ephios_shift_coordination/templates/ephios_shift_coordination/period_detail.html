@@ -1,67 +1,269 @@
 {% extends "base.html" %}
-{% load i18n %}
-{% block title %}{{ period.template_snapshot.title }}{% endblock %}
+{% load crispy_forms_filters i18n static %}
+{% block title %}
+    {{ period.template_snapshot.title }}
+{% endblock %}
 {% block content %}
-    <h1>{{ period.template_snapshot.title }}</h1>
-    <p>{{ period.start_date }} – {{ period.end_date }} · {{ period.effective_state_label }}</p>
-    {% if period.effective_state == "planning" %}
-        <p><a class="btn btn-primary"
-   href="{% url 'ephios_shift_coordination:plan' period.pk %}">{% translate "Plan services" %}</a></p>
-    {% endif %}
-    {% if period.state == "published" %}
-        <p><a href="{% url 'ephios_shift_coordination:publication' period.pk %}">{% translate "View published plan" %}</a></p>
-    {% endif %}
-    {% if not period.opened_at %}
-        <p>{% translate "The events are visible. No survey has been opened." %}</p>
-        <form method="post"
-              action="{% url 'ephios_shift_coordination:survey_open' period.pk %}">
-            {% csrf_token %}
-            {{ form.as_p }}
-            <button type="submit"
-                    name="action"
-                    value="save_settings"
-                    class="btn btn-secondary">{% translate "Save survey settings" %}</button>
-            <button type="submit"
-                    name="action"
-                    value="open"
-                    class="btn btn-primary">{% translate "Open survey and invite members" %}</button>
-        </form>
-    {% else %}
-        <p>{% translate "Response deadline" %}: {{ period.deadline }}</p>
-        {{ form.non_field_errors }}
-        <h2>{% translate "Responses" %}</h2>
-        {% for response in responses %}
-            <details>
-                <summary>{{ response.user }} · {% if response.submitted_at %}{% translate "Response saved" %}{% else %}{% translate "Awaiting response" %}{% endif %}</summary>
-                {% for label in response.eligibility_warnings %}
-                    <p>{{ label }}: {% translate "Currently no longer eligible for this shift." %}</p>
-                {% endfor %}
-                {% if response.submitted_at %}
-                    <p>{% translate "Personal maximum" %}: {{ response.maximum }} · {% translate "Version" %} {{ response.version }} · {{ response.updated_at }}</p>
-                    <p>{{ response.notes|linebreaksbr }}</p>
-                    <ul>
-                        {% for availability in response.availabilities.all %}
-                            <li>{{ availability.planned_shift.snapshot.start_time }} · {{ availability.planned_shift.snapshot.label }}: {{ availability.get_rating_display }}</li>
-                        {% endfor %}
-                    </ul>
-                {% endif %}
-            </details>
-        {% empty %}
-            <p>{% translate "No eligible recipients were found." %}</p>
-        {% endfor %}
-    {% endif %}
-    <ul>
-        {% for item in events %}
-            <li>
-                {{ item.date }}:
-                {% if item.event %}
-                    <a href="{{ item.event.get_absolute_url }}">{{ item.event.title }}</a>
-                {% elif item.missing %}
-                    {% translate "Conflict: the original event was deleted." %}
-                {% else %}
-                    {% translate "You do not have permission to view this event." %}
-                {% endif %}
-            </li>
-        {% endfor %}
-    </ul>
+    <link rel="stylesheet"
+          href="{% static 'ephios_shift_coordination/planning.css' %}">
+    <nav class="small mb-2">
+        <a href="{% url 'ephios_shift_coordination:period_list' %}">{% translate "Shift coordination" %}</a>
+    </nav>
+    <div class="d-flex flex-wrap align-items-center gap-2">
+        <h1 class="mb-0">{{ period.template_snapshot.title }}</h1>
+        {% include "ephios_shift_coordination/_period_status.html" %}
+    </div>
+    <p class="text-body-secondary">
+        <i class="far fa-calendar" aria-hidden="true"></i>
+        {{ period.start_date|date:"DATE_FORMAT" }} – {{ period.end_date|date:"DATE_FORMAT" }}
+        · {{ events|length }} {% translate "services" %}
+    </p>
+    {% include "ephios_shift_coordination/_period_steps.html" %}
+    <div class="row g-3">
+        <div class="col-lg-8">
+            {% if not period.opened_at %}
+                <section class="sc-card">
+                    <h2 class="sc-card-title">
+                        <i class="fas fa-poll"
+                           aria-hidden="true"></i> {% translate "Prepare the survey" %}
+                    </h2>
+                    <div class="sc-card-body">
+                        <p>
+                            {% translate "Opening the survey invites every member who may take at least one shift here. They can answer and change their answer until the deadline." %}
+                        </p>
+                        {% if period.rules.allow_observers %}
+                            <p class="text-body-secondary">
+                                <i class="fas fa-chair" aria-hidden="true"></i>
+                                {% translate "Sitting in is allowed: everybody who can see these services is invited, even without the qualifications." %}
+                            </p>
+                        {% endif %}
+                        <form method="post"
+                              action="{% url 'ephios_shift_coordination:survey_open' period.pk %}">
+                            {% csrf_token %}
+                            {{ form.non_field_errors }}
+                            {{ form.expected_version }}
+                            <div class="row">
+                                <div class="col-md-6">{{ form.deadline|as_crispy_field }}</div>
+                                <div class="col-md-6">{{ form.reminder_days|as_crispy_field }}</div>
+                            </div>
+                            {{ form.maximum|as_crispy_field }}
+                            <div class="d-flex flex-wrap gap-2">
+                                <button type="submit"
+                                        name="action"
+                                        value="save_settings"
+                                        class="btn btn-outline-secondary">
+                                    <i class="fas fa-save"
+                                       aria-hidden="true"></i> {% translate "Save settings" %}
+                                </button>
+                                <button type="submit"
+                                        name="action"
+                                        value="open"
+                                        class="btn btn-primary"
+                                        data-sc-busy="{% translate 'The survey is being opened and the invitations are prepared. This can take a moment, please keep this window open.' %}">
+                                    <i class="fas fa-paper-plane"
+                                       aria-hidden="true"></i> {% translate "Open survey and invite members" %}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </section>
+            {% else %}
+                <section class="sc-card">
+                    <h2 class="sc-card-title">
+                        {% if period.effective_state == "survey_open" %}
+                            <i class="fas fa-poll"
+                               aria-hidden="true"></i> {% translate "The survey is running" %}
+                        {% elif period.effective_state == "planning" %}
+                            <i class="fas fa-user-check"
+                               aria-hidden="true"></i> {% translate "Ready for planning" %}
+                        {% else %}
+                            <i class="fas fa-check-circle"
+                               aria-hidden="true"></i> {% translate "The plan is published" %}
+                        {% endif %}
+                    </h2>
+                    <div class="sc-card-body">
+                        <div class="sc-facts">
+                            <div>
+                                <span class="sc-fact-value">{{ answered }}/{{ responses|length }}</span>
+                                <span class="sc-fact-label">{% translate "members answered" %}</span>
+                            </div>
+                            <div>
+                                <span class="sc-fact-value">{{ period.deadline|date:"SHORT_DATETIME_FORMAT" }}</span>
+                                <span class="sc-fact-label">
+                                    {% if period.effective_state == "survey_open" %}
+                                        {% translate "answers accepted until" %}
+                                    {% else %}
+                                        {% translate "survey closed at" %}
+                                    {% endif %}
+                                </span>
+                            </div>
+                            {% if recommendation %}
+                                <div class="sc-fact-wide">
+                                    <span class="sc-fact-label">
+                                        <i class="fas fa-info-circle"
+                                           aria-hidden="true"></i> {{ recommendation }}
+                                    </span>
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 mt-3">
+                            {% if period.state == "published" %}
+                                <a class="btn btn-primary"
+                                   href="{% url 'ephios_shift_coordination:publication' period.pk %}">
+                                    <i class="fas fa-clipboard-check"
+                                       aria-hidden="true"></i> {% translate "View the published plan" %}
+                                </a>
+                            {% else %}
+                                <a class="btn btn-primary"
+                                   href="{% url 'ephios_shift_coordination:plan' period.pk %}">
+                                    <i class="fas fa-user-check" aria-hidden="true"></i>
+                                    {% if period.effective_state == "survey_open" %}
+                                        {% translate "Plan with the answers so far" %}
+                                    {% else %}
+                                        {% translate "Plan the services" %}
+                                    {% endif %}
+                                </a>
+                            {% endif %}
+                        </div>
+                        {% if period.effective_state == "survey_open" %}
+                            <p class="text-body-secondary small mt-2">
+                                {% translate "You can already look at the plan while the survey runs. New answers make a saved draft outdated; publishing is possible once the survey is closed." %}
+                            </p>
+                            <details class="sc-details">
+                                <summary>{% translate "Close the survey early" %}</summary>
+                                <div class="sc-details-body">
+                                    <p class="text-body-secondary">
+                                        {% translate "Members can then no longer change their answer. Missing answers stay missing, reminders are not sent any more." %}
+                                    </p>
+                                    <form method="post"
+                                          action="{% url 'ephios_shift_coordination:survey_close' period.pk %}">
+                                        {% csrf_token %}
+                                        {{ closing.non_field_errors }}
+                                        {{ closing.expected_version }}
+                                        {{ closing.confirm_close|as_crispy_field }}
+                                        <button class="btn btn-outline-danger" type="submit">
+                                            <i class="fas fa-lock"
+                                               aria-hidden="true"></i> {% translate "Close the survey now" %}
+                                        </button>
+                                    </form>
+                                </div>
+                            </details>
+                        {% endif %}
+                    </div>
+                </section>
+                <section class="sc-card">
+                    <h2 class="sc-card-title">
+                        <i class="fas fa-users" aria-hidden="true"></i> {% translate "Responses" %}
+                    </h2>
+                    <div class="sc-card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle sc-responses">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">{% translate "Member" %}</th>
+                                        <th scope="col">{% translate "Answer" %}</th>
+                                        <th scope="col">{% translate "Maximum" %}</th>
+                                        <th scope="col">{% translate "Availability" %}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for response in responses %}
+                                        <tr>
+                                            <td>
+                                                {{ response.user }}
+                                                {% for label in response.eligibility_warnings %}
+                                                    <span class="badge text-bg-warning"
+                                                          data-bs-toggle="tooltip"
+                                                          title="{% translate 'Currently without the qualification required for this shift.' %}">
+                                                        <i class="fas fa-exclamation-triangle"
+                                                           aria-hidden="true"></i> {{ label }}
+                                                    </span>
+                                                {% endfor %}
+                                            </td>
+                                            <td>
+                                                {% if response.submitted_at %}
+                                                    <span class="text-success"><i class="fas fa-check" aria-hidden="true"></i> {% translate "saved" %}</span>
+                                                    <div class="small text-body-secondary">{{ response.updated_at|date:"SHORT_DATETIME_FORMAT" }}</div>
+                                                {% else %}
+                                                    <span class="text-body-secondary"><i class="far fa-clock" aria-hidden="true"></i> {% translate "pending" %}</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if response.submitted_at %}
+                                                    {{ response.maximum }}
+                                                {% else %}
+                                                    —
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if response.submitted_at %}
+                                                    {% for value, count in response.ratings %}
+                                                        <span class="sc-chip sc-r-{{ value }}">
+                                                            {% include "ephios_shift_coordination/_rating_icon.html" with value=value %}
+                                                            {{ count }}
+                                                        </span>
+                                                    {% endfor %}
+                                                    {% if response.observer_count %}
+                                                        <span class="sc-chip sc-observer">
+                                                            <i class="fas fa-chair"
+                                                               aria-hidden="true"></i> {{ response.observer_count }}
+                                                        </span>
+                                                    {% endif %}
+                                                    {% if response.notes %}
+                                                        <details class="sc-note-details">
+                                                            <summary>{% translate "Note" %}</summary>
+                                                            <p class="sc-notes">{{ response.notes }}</p>
+                                                        </details>
+                                                    {% endif %}
+                                                {% else %}
+                                                    —
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% empty %}
+                                        <tr>
+                                            <td colspan="4" class="text-body-secondary">
+                                                {% translate "No eligible members were found for these services." %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            {% endif %}
+        </div>
+        <div class="col-lg-4">
+            <section class="sc-card">
+                <h2 class="sc-card-title">
+                    <i class="far fa-calendar" aria-hidden="true"></i> {% translate "Services" %}
+                </h2>
+                <ul class="list-group list-group-flush sc-service-list">
+                    {% for item in events %}
+                        <li class="list-group-item">
+                            <span class="text-body-secondary">{{ item.date|date:"D" }}, {{ item.date|date:"SHORT_DATE_FORMAT" }}</span>
+                            {% if item.event %}
+                                <a href="{{ item.event.get_absolute_url }}">{{ item.event.title }}</a>
+                                {% if period.state == "published" %}
+                                    <a class="small"
+                                       href="{% url 'ephios_shift_coordination:replacement' item.link.pk %}">
+                                        <i class="fas fa-people-arrows"
+                                           aria-hidden="true"></i> {% translate "Staffing" %}
+                                    </a>
+                                {% endif %}
+                            {% elif item.missing %}
+                                <span class="text-danger">
+                                    <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+                                    {% translate "Conflict: the original event was deleted." %}
+                                </span>
+                            {% else %}
+                                <span class="text-body-secondary">{% translate "You may not view this event." %}</span>
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            </section>
+        </div>
+    </div>
 {% endblock %}

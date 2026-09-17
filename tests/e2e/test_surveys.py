@@ -64,20 +64,18 @@ print(template.pk)
         second = browser.new_page(service_workers="block", locale="de-DE")
         third = browser.new_page(service_workers="block", locale="de-DE")
         try:
-            login(coordinator, "demo-001@example.invalid", "demo-only-member-password")
+            login(coordinator, "demo-001@example.invalid", "demo")
             coordinator.goto(f"{base}/shift-coordination/planning/new/")
             coordinator.locator('[name="template"]').select_option(str(template_id))
             coordinator.locator('[name="start_date"]').fill("2031-04-01")
             coordinator.locator('[name="end_date"]').fill("2031-04-30")
             with coordinator.expect_navigation(wait_until="domcontentloaded"):
-                coordinator.get_by_role("button", name="Datumsauswahl berechnen").click()
+                coordinator.get_by_role("button", name="Termine vorschlagen").click()
             for checkbox in coordinator.locator('[name="dates"]').all():
                 checkbox.uncheck()
             coordinator.locator('[name="dates"][value="2031-04-02"]').check()
             with coordinator.expect_navigation(wait_until="domcontentloaded"):
-                coordinator.get_by_role("button", name="Vorschau aktualisieren").click()
-            with coordinator.expect_navigation(wait_until="domcontentloaded"):
-                coordinator.get_by_role("button", name="Veranstaltungen erstellen").click()
+                coordinator.get_by_role("button", name="Dienste anlegen", exact=False).click()
             period_id = int(coordinator.url.rstrip("/").split("/")[-1])
             local_deadline_time = (
                 coordinator.locator('[name="deadline"]').input_value().split("T")[1]
@@ -104,46 +102,54 @@ print(template.pk)
                     for recipient in message["To"]
                 )
             )
-            assert "Einladung zur Verfügbarkeitsumfrage" in member_mail["Subject"]
+            assert (
+                "Dienstplanung" in member_mail["Subject"]
+                and "Wann kannst du?" in member_mail["Subject"]
+            )
             port = os.environ["EPHIOS_MAIL_PORT"]
             with urlopen(
                 f"http://127.0.0.1:{port}/api/v1/message/{member_mail['ID']}", timeout=10
             ) as response:
                 body = json.load(response)
             assert f"/shift-coordination/surveys/{period_id}/" in body["Text"]
-            assert "Wünsche sind keine Zusagen" in " ".join(body["Text"].split())
+            assert "noch keine Einteilung" in " ".join(body["Text"].split())
+            assert "persönlichen Höchstzahl" in " ".join(body["Text"].split())
             assert local_deadline_time in body["Text"]
-            login(member, "demo-003@example.invalid", "demo-only-member-password")
+            login(member, "demo-003@example.invalid", "demo")
             member.goto(f"{base}/shift-coordination/surveys/{period_id}/")
             expect(
                 member.get_by_role("heading", name="Deine Verfügbarkeit", exact=True)
             ).to_be_visible()
-            expect(member.get_by_text("Besonders erwünscht (Stern)", exact=True)).to_be_visible()
-            member.get_by_label("Persönliche Höchstzahl", exact=False).fill("0")
-            member.get_by_label("Anmerkungen", exact=False).fill(
+            expect(member.get_by_label("Besonders gern", exact=False)).to_have_count(1)
+            member.get_by_label("persönliche Höchstzahl", exact=False).fill("0")
+            member.get_by_label("Anmerkungen für die Koordination", exact=False).fill(
                 "<script>Nur für Koordination</script>"
             )
-            member.get_by_label("Besonders erwünscht (Stern)", exact=True).check()
-            member.get_by_role("button", name="Vollständige Antwort speichern").focus()
+            member.locator('input[value="preferred"]').first.check()
+            member.get_by_role("button", name="Antwort speichern").focus()
             with member.expect_navigation(wait_until="domcontentloaded"):
                 member.keyboard.press("Enter")
-            expect(member.get_by_label("Persönliche Höchstzahl", exact=False)).to_have_value("0")
-            expect(member.get_by_text("Antwort gespeichert", exact=False)).to_be_visible()
-            member.get_by_label("Persönliche Höchstzahl", exact=False).fill("1")
+            expect(member.get_by_label("persönliche Höchstzahl", exact=False)).to_have_value("0")
+            expect(member.get_by_text("Antwort gespeichert am", exact=False)).to_be_visible()
+            member.get_by_label("persönliche Höchstzahl", exact=False).fill("1")
             with member.expect_navigation(wait_until="domcontentloaded"):
-                member.get_by_role("button", name="Vollständige Antwort speichern").click()
-            expect(member.get_by_text("Version 2", exact=False)).to_be_visible()
+                member.get_by_role("button", name="Antwort speichern").click()
+            expect(member.get_by_text("Danke, deine Antwort wurde gespeichert.")).to_be_visible()
             assert member.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
-            login(second, "demo-043@example.invalid", "demo-only-member-password")
+            login(second, "demo-023@example.invalid", "demo")
             second.goto(f"{base}/shift-coordination/surveys/{period_id}/")
-            expect(second.get_by_label("Anmerkungen", exact=False)).to_have_value("")
-            second.get_by_label("Persönliche Höchstzahl", exact=False).fill("1")
-            second.get_by_label("Falls nötig (gelb)", exact=True).check()
+            expect(
+                second.get_by_label("Anmerkungen für die Koordination", exact=False)
+            ).to_have_value("")
+            second.get_by_label("persönliche Höchstzahl", exact=False).fill("1")
+            second.locator('input[value="if_needed"]').first.check()
             with second.expect_navigation(wait_until="domcontentloaded"):
-                second.get_by_role("button", name="Vollständige Antwort speichern").click()
-            login(third, "demo-004@example.invalid", "demo-only-member-password")
+                second.get_by_role("button", name="Antwort speichern").click()
+            login(third, "demo-004@example.invalid", "demo")
             third.goto(f"{base}/shift-coordination/surveys/{period_id}/")
-            expect(third.get_by_label("Anmerkungen", exact=False)).to_have_value("")
+            expect(
+                third.get_by_label("Anmerkungen für die Koordination", exact=False)
+            ).to_have_value("")
             coordinator.reload()
             detail = coordinator.locator("details").filter(has_text="Nur für Koordination")
             detail.locator("summary").click()
@@ -161,12 +167,14 @@ with patch('django.utils.timezone.now', return_value=period.deadline - timedelta
     call_command('run_periodic')
     call_command('run_periodic')
 records = NotificationDispatch.objects.filter(period=period, kind='reminder', skipped=False)
-answered = ['demo-003@example.invalid', 'demo-043@example.invalid']
+answered = ['demo-003@example.invalid', 'demo-023@example.invalid']
 assert not records.filter(user__email__in=answered).exists()
 assert records.filter(user__email='demo-004@example.invalid').count() == 1
-print(records.count())
+print(records.count(), period.responses.exclude(user__email__in=answered).count())
 """)
-            assert int(count) == 98
+            sent, invited = (int(value) for value in count.split())
+            # Everybody invited but the two who answered is reminded exactly once.
+            assert sent == invited > 10
             reminders = [
                 message
                 for message in mail_messages()
@@ -194,15 +202,11 @@ PlanningPeriod.objects.filter(pk={period_id}).update(deadline=timezone.now() - t
 print('deadline reached')
 """)
             with third.expect_navigation(wait_until="domcontentloaded"):
-                third.get_by_label("Persönliche Höchstzahl", exact=False).fill("1")
-                third.get_by_label("Verfügbar (grün)", exact=True).check()
-                third.get_by_role("button", name="Vollständige Antwort speichern").click()
-            expect(
-                third.get_by_text("Deine Antwort ist nur noch lesbar.", exact=True)
-            ).to_be_visible()
-            expect(
-                third.get_by_role("button", name="Vollständige Antwort speichern")
-            ).to_have_count(0)
+                third.get_by_label("persönliche Höchstzahl", exact=False).fill("1")
+                third.locator('input[value="available"]').first.check()
+                third.get_by_role("button", name="Antwort speichern").click()
+            expect(third.get_by_text("Die Umfrage ist geschlossen.", exact=False)).to_be_visible()
+            expect(third.get_by_role("button", name="Antwort speichern")).to_have_count(0)
             coordinator.reload()
             expect(coordinator.get_by_text("Planung", exact=False).first).to_be_visible()
             in_test_app(f"""
@@ -213,8 +217,8 @@ assert PlanningPeriod.objects.get(pk={period_id}).state == 'planning'
 print('closed')
 """)
             member.reload()
-            expect(member.get_by_label("Persönliche Höchstzahl", exact=False)).to_have_value("1")
-            expect(member.get_by_label("Persönliche Höchstzahl", exact=False)).to_be_disabled()
+            expect(member.get_by_label("persönliche Höchstzahl", exact=False)).to_have_value("1")
+            expect(member.get_by_label("persönliche Höchstzahl", exact=False)).to_be_disabled()
             member.screenshot(path=".local/test-results/survey-mobile-de.png", full_page=True)
             from tests.e2e.publication_flow import complete_publication
 

@@ -1,13 +1,25 @@
-// The local draft can also accept a complete proposal after explicit UI acceptance.
+// The local draft holds both roles: regular shifts and people sitting in.
 // Replacing it never writes to the server; saving remains a separate operation.
 export class DraftState {
-    constructor(assignments) { this.replace(assignments); }
-    replace(assignments) { this.selected = new Set(assignments.map(pair => pair.join(":"))); }
-    has(person, shift) { return this.selected.has(`${person}:${shift}`); }
-    toggle(person, shift, checked) {
-        const key = `${person}:${shift}`;
-        if (checked) this.selected.add(key);
-        else this.selected.delete(key);
+    constructor(assignments, observers = []) { this.replace(assignments, observers); }
+    replace(assignments, observers = []) {
+        this.roles = new Map();
+        for (const [person, shift] of assignments) this.roles.set(`${person}:${shift}`, "regular");
+        for (const [person, shift] of observers) this.roles.set(`${person}:${shift}`, "observer");
     }
-    assignments() { return [...this.selected].map(key => key.split(":").map(Number)); }
+    has(person, shift) { return this.roles.has(`${person}:${shift}`); }
+    role(person, shift) { return this.roles.get(`${person}:${shift}`); }
+    toggle(person, shift, checked, observer = false) {
+        const key = `${person}:${shift}`;
+        if (checked) this.roles.set(key, observer ? "observer" : "regular");
+        else this.roles.delete(key);
+    }
+    pairs(role) {
+        return [...this.roles.entries()]
+            .filter(([, value]) => value === role)
+            .map(([key]) => key.split(":").map(Number));
+    }
+    assignments() { return this.pairs("regular"); }
+    observers() { return this.pairs("observer"); }
+    all() { return [...this.roles.keys()].map(key => key.split(":").map(Number)); }
 }

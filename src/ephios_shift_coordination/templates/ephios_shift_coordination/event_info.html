@@ -1,8 +1,94 @@
 {% load i18n %}
-<p>{% translate "Planning period" %}:
-    {% if can_plan %}<a href="{{ period.get_absolute_url }}">{{ period.start_date }} – {{ period.end_date }}</a>
-{% else %}{{ period.start_date }} – {{ period.end_date }}{% endif %}
-</p>
-{% if response %}
-    <p><a href="{{ response.get_absolute_url }}">{% translate "Open your survey" %}</a></p>
-{% endif %}
+<div class="sc-event-info">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+        <span class="fw-semibold"><i class="fas fa-calendar-check"
+   aria-hidden="true"></i> {% translate "Shift coordination" %}</span>
+        <span class="text-body-secondary">
+            {{ period.template_snapshot.title }}:
+            {{ period.start_date|date:"SHORT_DATE_FORMAT" }} – {{ period.end_date|date:"SHORT_DATE_FORMAT" }}
+        </span>
+        {% include "ephios_shift_coordination/_period_status.html" %}
+    </div>
+    {% if shifts %}
+        <ul class="sc-event-shifts">
+            {% for state in shifts %}
+                <li>
+                    <span class="fw-semibold">{{ state.shift.snapshot.label }}</span>
+                    <span class="text-body-secondary">{{ state.count }}/{{ state.minimum }}</span>
+                    {% if state.mine %}
+                        <span class="badge text-bg-success">
+                            {% if state.mine.observer %}
+                                <i class="fas fa-chair"
+                                   aria-hidden="true"></i> {% translate "You are sitting in" %}
+                            {% else %}
+                                <i class="fas fa-check"
+                                   aria-hidden="true"></i> {% translate "You are staffed" %}
+                            {% endif %}
+                        </span>
+                    {% endif %}
+                    {% if state.can_leave or state.can_join or state.can_observe %}
+                        <form method="post"
+                              class="d-inline"
+                              action="{% url 'ephios_shift_coordination:staffing_action' state.shift.pk %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="user_id" value="{{ request.user.pk }}">
+                            <input type="hidden" name="next" value="event">
+                            {% if state.can_leave %}
+                                <button class="btn btn-sm btn-outline-danger"
+                                        type="submit"
+                                        name="action"
+                                        value="leave">
+                                    <i class="fas fa-user-slash"
+                                       aria-hidden="true"></i> {% translate "I cannot make it" %}
+                                </button>
+                            {% else %}
+                                {% if state.can_join %}
+                                    <button class="btn btn-sm btn-outline-success"
+                                            type="submit"
+                                            name="action"
+                                            value="join">
+                                        <i class="fas fa-user-plus"
+                                           aria-hidden="true"></i> {% translate "Take this shift" %}
+                                    </button>
+                                {% endif %}
+                                {% if state.can_observe %}
+                                    <button class="btn btn-sm btn-outline-secondary"
+                                            type="submit"
+                                            name="action"
+                                            value="observe">
+                                        <i class="fas fa-chair"
+                                           aria-hidden="true"></i> {% translate "Sit in" %}
+                                    </button>
+                                {% endif %}
+                            {% endif %}
+                        </form>
+                    {% endif %}
+                </li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+    <div class="d-flex flex-wrap gap-3 small">
+        {% if can_plan %}
+            <a href="{{ period.get_absolute_url }}">
+                <i class="fas fa-drafting-compass"
+                   aria-hidden="true"></i> {% translate "Open the planning period" %}
+            </a>
+        {% endif %}
+        {% if response %}
+            <a href="{{ response.get_absolute_url }}">
+                <i class="fas fa-poll" aria-hidden="true"></i>
+                {% if response.period.effective_state == "survey_open" %}
+                    {% translate "Enter your availability" %}
+                {% else %}
+                    {% translate "Your answer" %}
+                {% endif %}
+            </a>
+        {% endif %}
+        {% if replacement %}
+            <a href="{% url 'ephios_shift_coordination:replacement' service.pk %}">
+                <i class="fas fa-people-arrows"
+                   aria-hidden="true"></i> {% translate "Staffing and replacements" %}
+            </a>
+        {% endif %}
+    </div>
+</div>
