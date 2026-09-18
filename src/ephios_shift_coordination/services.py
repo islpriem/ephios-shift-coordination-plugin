@@ -76,7 +76,9 @@ def event_form(user, template):
     return form, data
 
 
-def create_period(user, *, template_id, start_date, end_date, dates, rules, creation_key):
+def create_period(
+    user, *, template_id, start_date, end_date, dates, rules, creation_key, next_reminder_on=None
+):
     with transaction.atomic():
         user = UserProfile.objects.select_for_update().get(pk=user.pk)
         if not enabled() or not can_plan(user) or not user.has_perm("core.add_event"):
@@ -123,6 +125,7 @@ def create_period(user, *, template_id, start_date, end_date, dates, rules, crea
             rules=rules,
             template_snapshot={**event_data, "event_type": template.event_type_id},
             creation_key=creation_key,
+            next_reminder_on=next_reminder_on,
             request_digest=digest,
             created_by=user,
         )

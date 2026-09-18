@@ -3,7 +3,7 @@ from datetime import date
 
 import pytest
 from django.contrib.auth.models import Group
-from django.test import Client
+from django.test import Client, RequestFactory
 from django.urls import reverse
 from dynamic_preferences.registries import global_preferences_registry
 
@@ -22,6 +22,7 @@ def settings_payload(configuration, **changes):
         **configuration.snapshot(),
         "service_reminder_time": "09:00",
         "assembly_reminder_time": "09:00",
+        "next_period_weeks": 2,
         **changes,
     }
 
@@ -355,3 +356,102 @@ def test_manually_created_events_stay_untouched(planning_data, client):
     page = client.get(event.get_absolute_url())
     assert page.status_code == 200
     assert b"Shift coordination" not in page.content
+
+
+def test_the_menu_sends_members_straight_to_the_surveys_and_coordinators_to_a_menu(
+    planning_data, client
+):
+    from ephios_shift_coordination.signals import navigation
+
+    request = RequestFactory().get("/")
+    request.user = planning_data.member
+    member = navigation(None, request=request)
+    assert [item["label"] for item in member] == ["Availability surveys", "Assemblies"]
+    assert not any(item.get("group") for item in member)
+
+    request.user = planning_data.coordinator
+    coordinator = navigation(None, request=request)
+    grouped = [item for item in coordinator if item.get("group") == "Shift coordination"]
+    assert [item["label"] for item in grouped] == ["Availability surveys", "Planning periods"]
+    assert [item["label"] for item in coordinator if not item.get("group")] == ["Assemblies"]
+
+
+def test_the_menu_stays_empty_for_anonymous_visitors(planning_data, client):
+    from django.contrib.auth.models import AnonymousUser
+
+    from ephios_shift_coordination.signals import navigation
+
+    request = RequestFactory().get("/")
+    request.user = AnonymousUser()
+    assert navigation(None, request=request) == []
+
+
+def period_payload(planning_data, **changes):
+    return {
+        **planning_data.configuration.snapshot(),
+        "template": planning_data.template.pk,
+        "start_date": "2026-10-01",
+        "end_date": "2026-10-31",
+        "creation_key": str(uuid.uuid4()),
+        "reminder_days": "3",
+        **changes,
+    }
+
+
+def test_the_reminder_for_the_next_period_is_suggested_and_kept(planning_data, client):
+    client.force_login(planning_data.coordinator)
+    payload = period_payload(planning_data)
+    page = client.post(url("period_create"), {**payload, "action": "calendar"})
+    assert page.status_code == 200
+    # Two weeks before the period ends, offered without anybody typing a date.
+    assert 'value="2026-10-17"' in page.content.decode()
+    assert "Plan the next period in time" in page.content.decode()
+    dates = ["2026-10-06", "2026-10-13"]
+    created = client.post(
+        url("period_create"),
+        {
+            **payload,
+            "action": "create",
+            "selection_ready": "1",
+            "reminder_ready": "1",
+            "remind_next": "on",
+            "next_reminder_date": "2026-10-20",
+            "dates": dates,
+        },
+    )
+    assert created.status_code == 302
+    assert PlanningPeriod.objects.get().next_reminder_on == date(2026, 10, 20)
+
+
+def test_the_reminder_can_be_switched_off_and_is_checked_for_sense(planning_data, client):
+    client.force_login(planning_data.coordinator)
+    payload = period_payload(planning_data)
+    common = {
+        **payload,
+        "action": "create",
+        "selection_ready": "1",
+        "reminder_ready": "1",
+        "dates": ["2026-10-06"],
+    }
+    refused = client.post(
+        url("period_create"), {**common, "remind_next": "on", "next_reminder_date": "2026-08-01"}
+    )
+    assert refused.status_code == 200 and not PlanningPeriod.objects.exists()
+    assert "has to be in the future" in refused.content.decode()
+    late = client.post(
+        url("period_create"), {**common, "remind_next": "on", "next_reminder_date": "2026-11-30"}
+    )
+    assert late.status_code == 200 and "comes too late" in late.content.decode()
+    off = client.post(url("period_create"), {**common, "next_reminder_date": ""})
+    assert off.status_code == 302
+    assert PlanningPeriod.objects.get().next_reminder_on is None
+
+
+def test_a_broken_end_date_reports_itself_instead_of_suggesting_a_reminder(planning_data, client):
+    client.force_login(planning_data.coordinator)
+    page = client.post(
+        url("period_create"),
+        period_payload(planning_data, end_date="not-a-date", action="calendar"),
+    )
+    assert page.status_code == 200 and not PlanningPeriod.objects.exists()
+    assert "Enter a valid date" in page.content.decode()

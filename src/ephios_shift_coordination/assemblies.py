@@ -4,15 +4,25 @@ Assemblies reuse the ordinary ephios event, shift and participation machinery. T
 only adds the agenda, the invitation and a signed link so people can answer from the mail.
 """
 
+from datetime import datetime
+
 from django.contrib.auth.models import Group
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.signing import BadSignature, SignatureExpired, dumps, loads
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.utils.translation import gettext as _
 from ephios.core.forms.events import EventForm
-from ephios.core.models import AbstractParticipation, LocalParticipation, Shift, UserProfile
+from ephios.core.models import (
+    AbstractParticipation,
+    Event,
+    EventType,
+    LocalParticipation,
+    Shift,
+    UserProfile,
+)
 from guardian.shortcuts import get_objects_for_user, get_users_with_perms
 
 from .access import enabled
@@ -211,3 +221,78 @@ def answer(assembly, user, *, attending):
     if errors := validator.get_decline_errors():
         raise Conflict(" ".join(str(error) for error in errors))
     return shift.signup_flow.perform_decline(participant, acting_user=user)
+
+
+def as_day(word):
+    """A written date, in the ISO or the German notation, or nothing."""
+    if day := parse_date(word):
+        return day
+    try:
+        return datetime.strptime(word, "%d.%m.%Y").date()
+    except ValueError:
+        return None
+
+
+def matching(word):
+    """Text matches title, kind and agenda; a year or a date matches the appointment."""
+    found = (
+        Q(event__title__icontains=word)
+        | Q(event__type__title__icontains=word)
+        | Q(agenda__icontains=word)
+    )
+    if word.isdigit() and len(word) == 4:
+        found |= Q(event__shifts__start_time__year=int(word))
+    if day := as_day(word):
+        found |= Q(event__shifts__start_time__date=day)
+    return found
+
+
+def listed(user, *, search="", event_type=None):
+    """Assemblies this person may see, narrowed by the kind of assembly and a search."""
+    events = get_objects_for_user(user, "core.view_event", klass=Event)
+    found = Assembly.objects.filter(event__in=events).select_related("event", "event__type")
+    if event_type:
+        found = found.filter(event__type=event_type)
+    for word in search.split():
+        found = found.filter(matching(word))
+    return found.prefetch_related("event__shifts", "minutes").distinct()
+
+
+def listed_types(user):
+    """The kinds of assembly this person actually has something to see from."""
+    return EventType.objects.filter(
+        pk__in=listed(user).values_list("event__type", flat=True)
+    ).order_by("title")
+
+
+def answer_options(assembly, user):
+    """Which of the two answers this person may give right now, asked of ephios itself."""
+    shift = shift_of(assembly)
+    if shift is None or not user.is_authenticated or shift.end_time <= timezone.now():
+        return {"yes": False, "no": False}
+    validator = shift.signup_flow.get_validator(user.as_participant())
+    return {"yes": validator.can_sign_up(), "no": validator.can_decline()}
+
+
+def attendance(assembly):
+    """How the invitation stands: who said yes, who said no and who has not answered."""
+    shift = shift_of(assembly)
+    people = list(invited(assembly.event))
+    if shift is None:
+        return {"yes": [], "no": [], "quiet": people, "invited": len(people)}
+    answers = dict(
+        LocalParticipation.objects.filter(shift=shift, user__in=people).values_list(
+            "user_id", "state"
+        )
+    )
+    states = AbstractParticipation.States
+    return {
+        "yes": [person for person in people if answers.get(person.pk) == states.CONFIRMED],
+        "no": [person for person in people if answers.get(person.pk) == states.USER_DECLINED],
+        "quiet": [
+            person
+            for person in people
+            if answers.get(person.pk) not in (states.CONFIRMED, states.USER_DECLINED)
+        ],
+        "invited": len(people),
+    }

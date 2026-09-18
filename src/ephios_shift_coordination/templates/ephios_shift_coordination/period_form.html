@@ -67,6 +67,7 @@
         </section>
         {% if days %}
             <input type="hidden" name="selection_ready" value="1">
+            <input type="hidden" name="reminder_ready" value="1">
             <section class="sc-card">
                 <h2 class="sc-card-title">
                     <span class="sc-step-number">2</span> {% translate "Choose the dates" %}
@@ -100,7 +101,21 @@
             </section>
             <section class="sc-card">
                 <h2 class="sc-card-title">
-                    <span class="sc-step-number">3</span> {% translate "Check and create" %}
+                    <span class="sc-step-number">3</span> {% translate "Plan the next period in time" %}
+                </h2>
+                <div class="sc-card-body">
+                    <p class="text-body-secondary">
+                        {% translate "A planning period does not announce its successor. Let ephios remind you while there is still time to ask people." %}
+                    </p>
+                    {{ form.remind_next|as_crispy_field }}
+                    <div class="row">
+                        <div class="col-md-6">{{ form.next_reminder_date|as_crispy_field }}</div>
+                    </div>
+                </div>
+            </section>
+            <section class="sc-card">
+                <h2 class="sc-card-title">
+                    <span class="sc-step-number">4</span> {% translate "Check and create" %}
                 </h2>
                 <div class="sc-card-body">
                     <p>{% translate "Every selected date becomes one event with these shifts:" %}</p>

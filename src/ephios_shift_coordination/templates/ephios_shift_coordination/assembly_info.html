@@ -18,18 +18,38 @@
             <span class="badge text-bg-warning"><i class="far fa-clock" aria-hidden="true"></i> {% translate "Nobody has been invited yet" %}</span>
         {% endif %}
     </div>
+    {% if attendance %}
+        <div class="d-flex flex-wrap gap-2 mt-2">
+            <span class="badge text-bg-success" data-bs-toggle="tooltip" title="{% for person in attendance.yes %}{{ person }}{% if not forloop.last %}, {% endif %}{% empty %}{% translate 'Nobody yet' %}{% endfor %}">
+                <i class="fas fa-check" aria-hidden="true"></i>
+                {% blocktranslate with count=attendance.yes|length %}{{ count }} coming{% endblocktranslate %}
+            </span>
+            <span class="badge text-bg-danger" data-bs-toggle="tooltip" title="{% for person in attendance.no %}{{ person }}{% if not forloop.last %}, {% endif %}{% empty %}{% translate 'Nobody yet' %}{% endfor %}">
+                <i class="fas fa-times" aria-hidden="true"></i>
+                {% blocktranslate with count=attendance.no|length %}{{ count }} cannot come{% endblocktranslate %}
+            </span>
+            <span class="badge text-bg-warning" data-bs-toggle="tooltip" title="{% for person in attendance.quiet %}{{ person }}{% if not forloop.last %}, {% endif %}{% empty %}{% translate 'Nobody yet' %}{% endfor %}">
+                <i class="far fa-clock" aria-hidden="true"></i>
+                {% blocktranslate with count=attendance.quiet|length %}{{ count }} have not answered{% endblocktranslate %}
+            </span>
+            <span class="badge text-bg-light">
+                {% blocktranslate with count=attendance.invited %}{{ count }} invited{% endblocktranslate %}
+            </span>
+        </div>
+    {% endif %}
     {% if agenda %}
-        <p class="mb-1 mt-2 fw-semibold">{% translate "Agenda" %}</p>
+        <p class="mb-1 mt-3 fw-semibold">{% translate "Agenda" %}</p>
         <ol class="mb-0">
             {% for item in agenda %}<li>{{ item }}</li>{% endfor %}
         </ol>
     {% endif %}
     {% if minutes %}
-        <p class="mb-1 mt-2 fw-semibold">{% translate "Assembly minutes" %}</p>
-        <ul class="mb-0">
+        <p class="mb-1 mt-3 fw-semibold">{% translate "Assembly minutes" %}</p>
+        <div class="d-flex flex-wrap gap-2">
             {% for record in minutes %}
-                <li>
-                    <a href="{% url 'ephios_shift_coordination:minutes_file' record.pk %}"
+                <div class="btn-group btn-group-sm" role="group">
+                    <a class="btn btn-outline-primary"
+                       href="{% url 'ephios_shift_coordination:minutes_file' record.pk %}"
                        target="_blank"
                        rel="noopener">
                         <i class="far fa-file-pdf" aria-hidden="true"></i>
@@ -37,74 +57,81 @@
                     </a>
                     {% if responsible %}
                         <form method="post"
-                              class="d-inline"
                               action="{% url 'ephios_shift_coordination:minutes_delete' record.pk %}">
                             {% csrf_token %}
                             <button type="submit"
-                                    class="btn btn-sm btn-link text-danger p-0">{% translate "Delete" %}</button>
+                                    class="btn btn-outline-danger"
+                                    data-bs-toggle="tooltip"
+                                    title="{% translate 'Delete these assembly minutes' %}">
+                                <i class="fas fa-trash" aria-hidden="true"></i>
+                                <span class="visually-hidden">{% translate "Delete" %}</span>
+                            </button>
                         </form>
                     {% endif %}
-                </li>
+                </div>
             {% endfor %}
-        </ul>
+        </div>
     {% endif %}
     {% if responsible %}
-        <form method="post"
-              enctype="multipart/form-data"
-              class="d-flex flex-wrap align-items-end gap-2 mt-3 pt-2 border-top"
-              action="{% url 'ephios_shift_coordination:minutes_upload' assembly.pk %}">
-            {% csrf_token %}
-            <div>
-                <label class="form-label small d-block mb-1"
+        <div class="mt-3 pt-3 border-top">
+            <form method="post"
+                  enctype="multipart/form-data"
+                  action="{% url 'ephios_shift_coordination:minutes_upload' assembly.pk %}">
+                {% csrf_token %}
+                <label class="form-label small mb-1"
                        for="{{ minutes_form.file.id_for_label }}">
                     {% translate "File the assembly minutes as PDF" %}
                 </label>
-                {{ minutes_form.file }}
-            </div>
-            <button type="submit" class="btn btn-sm btn-outline-primary">
-                <i class="fas fa-upload" aria-hidden="true"></i> {% translate "File minutes" %}
-            </button>
-        </form>
-        <p class="small text-body-secondary mb-0 mt-2">
-            <i class="far fa-bell" aria-hidden="true"></i>
-            {% if reminders.sent %}
-                {% translate "Reminders sent:" %}
-                {% for moment in reminders.sent %}
-                    {{ moment|date:"SHORT_DATETIME_FORMAT" }}{% if not forloop.last %}, {% endif %}
-                {% endfor %}
-            {% else %}
-                {% translate "No reminder has been sent yet." %}
-            {% endif %}
-            {% if reminders.next %}
-                {% blocktranslate with moment=reminders.next|date:"SHORT_DATETIME_FORMAT" %}Next reminder: {{ moment }}.{% endblocktranslate %}
-            {% else %}
-                {% translate "No further reminder is planned." %}
-            {% endif %}
-        </p>
-        <details class="sc-details mt-2">
-            <summary>
-                {% blocktranslate count counter=recipients|length %}Invite 1 person{% plural %}Invite {{ counter }} people{% endblocktranslate %}
-            </summary>
-            <div class="sc-details-body">
-                <p class="text-body-secondary small">
-                    {% translate "Everybody who may see this assembly gets a mail with the agenda and a link to answer. You can send it again later, for example after the agenda changed." %}
-                </p>
-                <p class="small">
-                    {% for person in recipients %}{{ person }}{% if not forloop.last %}, {% endif %}{% endfor %}
-                </p>
-                <form method="post"
-                      action="{% url 'ephios_shift_coordination:assembly_invite' assembly.pk %}">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-sm btn-primary">
-                        <i class="fas fa-paper-plane" aria-hidden="true"></i>
-                        {% if assembly.invited_at %}
-                            {% translate "Send the invitation again" %}
-                        {% else %}
-                            {% translate "Send the invitation now" %}
-                        {% endif %}
+                <div class="input-group input-group-sm">
+                    <input type="file"
+                           class="form-control"
+                           accept=".pdf"
+                           name="{{ minutes_form.file.html_name }}"
+                           id="{{ minutes_form.file.id_for_label }}">
+                    <button type="submit" class="btn btn-outline-primary">
+                        <i class="fas fa-upload"
+                           aria-hidden="true"></i> {% translate "File minutes" %}
                     </button>
-                </form>
-            </div>
-        </details>
+                </div>
+            </form>
+            <p class="small text-body-secondary mb-0 mt-2">
+                <i class="far fa-bell" aria-hidden="true"></i>
+                {% if reminders.sent %}
+                    {% translate "Reminders sent:" %}
+                    {% for moment in reminders.sent %}
+                        {{ moment|date:"SHORT_DATETIME_FORMAT" }}{% if not forloop.last %}, {% endif %}
+                    {% endfor %}
+                {% else %}
+                    {% translate "No reminder has been sent yet." %}
+                {% endif %}
+                {% if reminders.next %}
+                    {% blocktranslate with moment=reminders.next|date:"SHORT_DATETIME_FORMAT" %}Next reminder: {{ moment }}.{% endblocktranslate %}
+                {% else %}
+                    {% translate "No further reminder is planned." %}
+                {% endif %}
+            </p>
+            <details class="sc-details mt-2">
+                <summary>
+                    {% blocktranslate count counter=attendance.invited %}Invite 1 person{% plural %}Invite {{ counter }} people{% endblocktranslate %}
+                </summary>
+                <div class="sc-details-body">
+                    <p class="text-body-secondary small">
+                        {% translate "Everybody who may see this assembly gets a mail with the agenda and a link to answer. You can send it again later, for example after the agenda changed." %}
+                    </p>
+                    <form method="post"
+                          action="{% url 'ephios_shift_coordination:assembly_invite' assembly.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-primary">
+                            <i class="fas fa-paper-plane" aria-hidden="true"></i>
+                            {% if assembly.invited_at %}
+                                {% translate "Send the invitation again" %}
+                            {% else %}
+                                {% translate "Send the invitation now" %}
+                            {% endif %}
+                        </button>
+                    </form>
+                </div>
+            </details>
+        </div>
     {% endif %}
 </div>

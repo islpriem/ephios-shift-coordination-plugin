@@ -17,7 +17,14 @@ from ephios.core.models.users import Notification
 from .access import enabled
 from .dates import local_datetime
 from .ephios_integration import is_assembly, is_service
-from .models import Assembly, ObserverParticipation, PlanningSettings, ReminderDispatch
+from .models import (
+    Assembly,
+    NotificationDispatch,
+    ObserverParticipation,
+    PlanningPeriod,
+    PlanningSettings,
+    ReminderDispatch,
+)
 
 CONFIRMED = AbstractParticipation.States.CONFIRMED
 KINDS = ("service", "assembly")
@@ -156,3 +163,25 @@ def overview(shift):
         "sent": [datetime.fromisoformat(moment) for moment in sent],
         "next": later[0] if later else None,
     }
+
+
+def process_period_reminders():
+    """Tell whoever created a period when it is time to plan the one after it."""
+    today = timezone.localdate()
+    for period in PlanningPeriod.objects.filter(
+        next_reminder_on__lte=today, created_by__isnull=False
+    ).select_related("created_by"):
+        with transaction.atomic():
+            record, created = NotificationDispatch.objects.get_or_create(
+                period=period,
+                user=period.created_by,
+                kind="next_period",
+                key=period.next_reminder_on.isoformat(),
+            )
+            if created and period.created_by.is_active:
+                record.notification = Notification.objects.create(
+                    user=period.created_by,
+                    slug="shift_coordination_next_period",
+                    data={"period_id": period.pk},
+                )
+                record.save(update_fields=["notification"])

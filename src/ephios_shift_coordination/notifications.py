@@ -633,3 +633,52 @@ class AssemblyReminder(AssemblyInvitation):
         return _("Reminder: {title}, {when}").format(
             title=assembly.event.title, when=cls.when(assembly)
         )
+
+
+class NextPeriodDue(AbstractNotificationHandler):
+    """A nudge at the day the coordinator picked when they created the previous period."""
+
+    slug = "shift_coordination_next_period"
+    title = _("Time to plan the next service period")
+
+    @classmethod
+    def period(cls, notification):
+        return PlanningPeriod.objects.filter(pk=notification.data["period_id"]).first()
+
+    @classmethod
+    def get_subject(cls, notification):
+        period = cls.period(notification)
+        if period is None:
+            return str(cls.title)
+        return _("Plan the period after {period}").format(period=period_label(period))
+
+    @classmethod
+    def get_body(cls, notification):
+        period = cls.period(notification)
+        if period is None:
+            return ""
+        return text(
+            [
+                _("Hello {name},").format(name=notification.user.get_full_name()),
+                "",
+                _(
+                    "you asked to be reminded: the period {period} ends soon, so this is a good "
+                    "moment to create the next one and ask people when they can help."
+                ).format(period=period_label(period)),
+            ]
+        )
+
+    @classmethod
+    def get_actions(cls, notification):
+        return [
+            (
+                str(_("Create a planning period")),
+                make_absolute(reverse("ephios_shift_coordination:period_create")),
+            )
+        ]
+
+    @classmethod
+    def is_obsolete(cls, notification):
+        from .access import enabled
+
+        return not enabled() or cls.period(notification) is None

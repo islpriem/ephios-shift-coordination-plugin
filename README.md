@@ -120,11 +120,16 @@ and service templates through ephios settings. The holiday region, the calculati
 budget and the number of regular people a shift needs besides anybody sitting in are
 instance-wide settings; periods only carry the values that differ per period.
 
-Coordinators use **Dienstplanung** and create a period in three steps: template and
-date range, the single dates in the calendar, then a summary of the services that will
-be created. Events are immediately visible according to their permissions and
+Coordinators use **Dienstplanung**, which is a menu with the surveys and the planning periods;
+members without planning rights get a single entry that goes straight to their surveys. A period
+is created in four steps: template and date range, the single dates in the calendar, the
+reminder for the next period, then a summary of the services that will be created. Events are immediately visible according to their permissions and
 self-signup is disabled. The creator is also made responsible, in addition to the
 template's configured responsibles.
+
+The last step before creating asks whether ephios should remind you to plan the period after
+this one, defaulting to the number of weeks configured in the planning settings. On that day the
+creator gets one message with a link straight to a new planning period.
 
 On the period page, set the response deadline, the reminder offsets and the recommended
 number of shifts per person, then open the survey. The recommendation is calculated from
@@ -242,8 +247,10 @@ Both marks default to off, so existing event types are unaffected. An assembly t
 carries the default title and location of its assemblies; description, invited groups and
 responsibles are the event type's own ephios fields.
 
-Whoever is responsible for such a type uses **Versammlungen** and calls one with a single
-form: kind, title, location, description, date, times and an optional agenda. The page lists
+**Versammlungen** lists upcoming and past assemblies on one page, filtered by kind of assembly
+and searched by title, agenda or date. Each row carries your own answer, a yes and a no button
+while the assembly has not happened yet, and one button per filed set of minutes. Whoever is
+responsible for an assembly type calls a new one with a single form: kind, title, location, description, date, times and an optional agenda. The page lists
 who would be invited before anything is sent. Calling an assembly creates one ordinary ephios
 event with one shift that uses instant confirmation, needs no qualification and has no minimum
 staffing, so everybody invited answers for themselves and may change their mind later.
@@ -317,5 +324,10 @@ The Docker build context contains only the wheel and Dockerfile. No development
 source checkout is mounted in the application container. All service images are
 pinned by digest. This Compose configuration is exclusively for local testing;
 production installation, updates and recovery are not yet validated.
+
+Administrators can hide the working hours instance-wide in the planning settings. Everybody
+but staff then gets 403 on their own working hour page and on the overview, and the links
+ephios writes itself disappear. This reaches into two core views on purpose: without it the
+pages stay reachable by typing their address.
 
 Never use real member data or production mail credentials for local tests.

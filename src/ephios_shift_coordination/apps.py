@@ -13,3 +13,6 @@ class PluginApp(PluginConfig):
 
     def ready(self):
         from . import preferences, signals  # noqa: F401
+        from .working_hours import guard_core_views
+
+        guard_core_views()

@@ -14,15 +14,16 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.utils.translation import ngettext
 from django.views.decorators.http import require_http_methods
-from ephios.core.models import Event
-from guardian.shortcuts import get_objects_for_user
 
 from .access import enabled, require_access
 from .assemblies import (
     answer,
+    answer_options,
     answer_state,
     callable_types,
     invite,
+    listed,
+    listed_types,
     plan_assembly,
     resolve_answer,
     shift_of,
@@ -43,7 +44,7 @@ from .forms import (
     SurveyOpeningForm,
     SurveyResponseForm,
 )
-from .minutes import display_name, file_minutes, remove, visible
+from .minutes import display_name, file_minutes, remove
 from .models import (
     Assembly,
     AssemblyMinutes,
@@ -214,20 +215,30 @@ def period_list(request):
 def period_create(request):
     configuration, _created = PlanningSettings.objects.get_or_create(pk=1)
     defaults = configuration.snapshot()
-    form = PeriodForm(request.POST or None, initial=defaults, defaults=defaults)
+    form = PeriodForm(
+        request.POST or None,
+        initial=defaults,
+        defaults=defaults,
+        reminder_weeks=configuration.next_period_weeks,
+    )
     context = {"form": form}
     status = 200
-    if request.method == "POST" and form.is_valid():
+    if request.method == "POST":
+        # A rejected field must not throw the whole wizard back to its first step, so the
+        # calendar and the following steps are rebuilt from whatever did survive validation.
+        complete = form.is_valid()
         values = form.cleaned_data
         rules = form.rules()
         try:
+            if not {"start_date", "end_date", "weekdays"} <= values.keys():
+                raise ValidationError(_("Preview and select the dates before creating events."))
             days = calendar_days(
                 values["start_date"],
                 values["end_date"],
                 values["weekdays"],
                 rules["country"],
                 rules["region"],
-                values["exclude_holidays"],
+                values.get("exclude_holidays", False),
             )
             if request.POST.get("selection_ready") and request.POST.get("action") != "calendar":
                 selected = form.selected_dates(request.POST.getlist("dates"))
@@ -237,7 +248,7 @@ def period_create(request):
                 day["selected"] = day["date"] in selected
                 day["column"] = day["date"].weekday() + 1
             context.update(days=days, selected_dates=selected)
-            if request.POST.get("action") == "create":
+            if complete and request.POST.get("action") == "create":
                 if not request.POST.get("selection_ready"):
                     raise ValidationError(_("Preview and select the dates before creating events."))
                 period = create_period(
@@ -248,6 +259,7 @@ def period_create(request):
                     dates=selected,
                     rules=rules,
                     creation_key=values["creation_key"],
+                    next_reminder_on=form.reminder_day(),
                 )
                 messages.success(
                     request,
@@ -593,32 +605,40 @@ def staffing_action(request, pk):
     return redirect("ephios_shift_coordination:replacement", pk=planned.event_id)
 
 
-def assembly_rows(user):
-    """Assemblies this person may see, next one first, past ones after them."""
-    visible = get_objects_for_user(user, "core.view_event", klass=Event)
+def assembly_rows(user, *, search="", event_type=None):
+    """What the list shows per assembly: when it is, the own answer, and what to do next."""
     rows = [
-        {"assembly": assembly, "shift": shift_of(assembly), "answer": answer_state(assembly, user)}
-        for assembly in Assembly.objects.filter(event__in=visible)
-        .select_related("event", "event__type")
-        .prefetch_related("event__shifts")
+        {
+            "assembly": assembly,
+            "shift": shift_of(assembly),
+            "answer": answer_state(assembly, user),
+            "options": answer_options(assembly, user),
+            "minutes": list(assembly.minutes.all()),
+        }
+        for assembly in listed(user, search=search, event_type=event_type)
     ]
     rows = [row for row in rows if row["shift"]]
-    upcoming = sorted(
-        (row for row in rows if row["shift"].end_time > timezone.now()),
-        key=lambda row: row["shift"].start_time,
+    now = timezone.now()
+    return (
+        sorted(
+            (row for row in rows if row["shift"].end_time > now),
+            key=lambda row: row["shift"].start_time,
+        ),
+        sorted(
+            (row for row in rows if row["shift"].end_time <= now),
+            key=lambda row: row["shift"].start_time,
+            reverse=True,
+        ),
     )
-    past = sorted(
-        (row for row in rows if row["shift"].end_time <= timezone.now()),
-        key=lambda row: row["shift"].start_time,
-        reverse=True,
-    )
-    return upcoming, past
 
 
 @require_access("member")
 @require_http_methods(["GET"])
 def assembly_list(request):
-    upcoming, past = assembly_rows(request.user)
+    search = request.GET.get("q", "").strip()
+    kinds = listed_types(request.user)
+    chosen = kinds.filter(pk=request.GET.get("type") or 0).first()
+    upcoming, past = assembly_rows(request.user, search=search, event_type=chosen)
     return render(
         request,
         "ephios_shift_coordination/assembly_list.html",
@@ -626,9 +646,26 @@ def assembly_list(request):
             "upcoming": upcoming,
             "past": past,
             "types": callable_types(request.user),
-            "tab": "assemblies",
+            "kinds": kinds,
+            "chosen": chosen,
+            "search": search,
         },
     )
+
+
+@require_access("member")
+@require_http_methods(["POST"])
+def assembly_answer(request, pk):
+    """Answer straight from the list; the signed link does the same for people in mail."""
+    assembly = get_object_or_404(Assembly.objects.select_related("event"), pk=pk)
+    if not request.user.has_perm("core.view_event", assembly.event):
+        raise PermissionDenied
+    try:
+        answer(assembly, request.user, attending=request.POST.get("action") == "yes")
+        messages.success(request, _("Thank you, your answer has been saved."))
+    except (Conflict, ValidationError) as exc:
+        messages.error(request, str(exc) if isinstance(exc, Conflict) else " ".join(exc.messages))
+    return redirect(request.POST.get("next") or "ephios_shift_coordination:assembly_list")
 
 
 @require_access("member")
@@ -722,17 +759,6 @@ def assembly_respond(request, token):
             "error": error,
         },
         status=409 if error else 200,
-    )
-
-
-@require_access("member")
-@require_http_methods(["GET"])
-def minutes_list(request):
-    search = request.GET.get("q", "").strip()
-    return render(
-        request,
-        "ephios_shift_coordination/minutes_list.html",
-        {"minutes": visible(request.user, search), "search": search, "tab": "minutes"},
     )
 
 

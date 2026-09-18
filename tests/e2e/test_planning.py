@@ -28,7 +28,9 @@ def test_demo_coordinator_creates_service_series_and_member_sees_event():
         member = None
         try:
             login(coordinator, "demo-001@example.invalid", "demo")
-            coordinator.get_by_role("link", name="Dienstplanung", exact=True).click()
+            # Coordinators reach the periods through the menu; members get the surveys directly.
+            coordinator.get_by_role("button", name="Dienstplanung", exact=True).click()
+            coordinator.get_by_role("link", name="Planungsintervalle", exact=True).click()
             coordinator.get_by_role("link", name="Neues Planungsintervall").click()
             coordinator.locator('[name="template"]').select_option(label="Dienst")
             coordinator.locator('[name="start_date"]').fill("2030-04-01")
@@ -53,8 +55,10 @@ def test_demo_coordinator_creates_service_series_and_member_sees_event():
             )
             login(member, "demo-003@example.invalid", "demo")
             member.locator(".navbar-toggler").click()
-            expect(member.get_by_role("link", name="Dienstplanung", exact=True)).to_have_count(0)
-            expect(member.get_by_role("link", name="Umfragen", exact=True)).to_be_visible()
+            expect(member.get_by_role("button", name="Dienstplanung", exact=True)).to_have_count(0)
+            expect(
+                member.get_by_role("link", name="Verfügbarkeitsumfragen", exact=True)
+            ).to_be_visible()
             member.goto(base + event_path)
             expect(member.get_by_text("Schicht 1", exact=True)).to_be_visible()
             expect(member.get_by_text("Schicht 2", exact=True)).to_be_visible()

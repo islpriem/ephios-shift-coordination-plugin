@@ -7,7 +7,7 @@ from django.core.exceptions import ValidationError
 from django.urls import reverse
 from django.utils import timezone
 from dynamic_preferences.registries import global_preferences_registry
-from ephios.core.models import AbstractParticipation, LocalParticipation
+from ephios.core.models import AbstractParticipation, LocalParticipation, Shift
 from ephios.core.models.users import Notification
 
 from ephios_shift_coordination.assemblies import answer_link, shift_of
@@ -220,3 +220,86 @@ def test_the_panel_never_reaches_somebody_who_may_not_see_the_event(
     request = rf.get(assembly.event.get_absolute_url())
     request.user = planning_data.outsider
     assert event_info(None, request=request, event=assembly.event) == ""
+
+
+@pytest.mark.django_db
+def test_the_list_filters_by_kind_and_offers_only_kinds_with_something_to_see(
+    planning_data, client, assembly_type
+):
+    from ephios.core.models import EventType
+
+    other = EventType.objects.create(title="Board meeting")
+    other.preferences["shift_coordination__is_assembly"] = True
+    other.preferences["visible_for"] = [planning_data.group]
+    other.preferences["responsible_groups"] = [planning_data.coordination]
+    call(planning_data, assembly_type)
+    call(planning_data, other, title="Board round")
+    client.force_login(planning_data.member)
+    page = client.get(url("assembly_list")).content.decode()
+    assert "Monthly meeting" in page and "Board round" in page
+    narrowed = client.get(url("assembly_list"), {"type": assembly_type.pk}).content.decode()
+    assert "Monthly meeting" in narrowed and "Board round" not in narrowed
+    # An unknown kind is ignored rather than hiding everything.
+    assert "Monthly meeting" in client.get(url("assembly_list"), {"type": "999"}).content.decode()
+
+
+@pytest.mark.django_db
+def test_somebody_answers_an_upcoming_assembly_straight_from_the_list(
+    planning_data, client, assembly_type
+):
+    assembly = call(planning_data, assembly_type)
+    client.force_login(planning_data.member)
+    page = client.get(url("assembly_list")).content.decode()
+    assert url("assembly_answer", assembly.pk) in page and "No answer yet" in page
+    response = client.post(url("assembly_answer", assembly.pk), {"action": "yes"})
+    assert response.status_code == 302
+    participation = LocalParticipation.objects.get(user=planning_data.member)
+    assert participation.state == AbstractParticipation.States.CONFIRMED
+    assert "You said yes" in client.get(url("assembly_list")).content.decode()
+    client.post(url("assembly_answer", assembly.pk), {"action": "no"})
+    participation.refresh_from_db()
+    assert participation.state == AbstractParticipation.States.USER_DECLINED
+
+
+@pytest.mark.django_db
+def test_an_assembly_that_is_over_offers_no_buttons(planning_data, client, assembly_type):
+    assembly = call(planning_data, assembly_type)
+    Shift.objects.filter(event=assembly.event).update(
+        start_time=timezone.now() - timedelta(hours=3),
+        end_time=timezone.now() - timedelta(hours=1),
+    )
+    client.force_login(planning_data.member)
+    page = client.get(url("assembly_list")).content.decode()
+    assert "Past assemblies" in page
+    assert url("assembly_answer", assembly.pk) not in page
+    assert client.post(url("assembly_answer", assembly.pk), {"action": "yes"}).status_code == 302
+    assert not LocalParticipation.objects.exists()
+
+
+@pytest.mark.django_db
+def test_somebody_who_may_not_see_an_assembly_cannot_answer_it(
+    planning_data, client, assembly_type
+):
+    assembly = call(planning_data, assembly_type)
+    client.force_login(planning_data.outsider)
+    assert client.post(url("assembly_answer", assembly.pk), {"action": "yes"}).status_code == 403
+
+
+@pytest.mark.django_db
+def test_the_panel_counts_who_is_coming_who_is_not_and_who_is_quiet(
+    planning_data, client, assembly_type
+):
+    from ephios_shift_coordination.assemblies import answer
+
+    assembly = call(planning_data, assembly_type)
+    answer(assembly, planning_data.member, attending=True)
+    answer(assembly, planning_data.admin, attending=False)
+    client.force_login(planning_data.coordinator)
+    page = client.get(assembly.event.get_absolute_url()).content.decode()
+    assert "1 coming" in page and "1 cannot come" in page
+    assert "1 have not answered" in page and "3 invited" in page
+    assert "member" in page  # the tooltip names them, not just the count
+    # An ordinary member sees the assembly but not who answered what.
+    client.force_login(planning_data.member)
+    page = client.get(assembly.event.get_absolute_url()).content.decode()
+    assert "1 coming" not in page

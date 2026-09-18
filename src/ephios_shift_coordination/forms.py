@@ -1,6 +1,6 @@
 import uuid
 from collections import defaultdict
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import holidays
@@ -55,6 +55,10 @@ REMINDER_HELP = {
 }
 
 SETTINGS_HELP = {
+    "next_period_weeks": _(
+        "Suggested day for the reminder about the next planning period, counted back from "
+        "the end of the one being created."
+    ),
     "weekdays": _("Preselected weekdays for new planning periods."),
     "country": _("Country of the holiday calendar."),
     "region": _("Region of the holiday calendar. Without a region, holidays cannot be skipped."),
@@ -184,6 +188,10 @@ class SettingsForm(RuleForm):
             self.initial[name] = ", ".join(map(str, self.initial.get(name) or []))
             self.fields[name].help_text = REMINDER_HELP[name]
         self.initial["api_event_types"] = self.instance.api_event_types.all()
+        self.fields["hide_working_hours"].help_text = _(
+            "Everybody but administrators stops seeing the working hour pages, their own as "
+            "well as the overview, and the links to them disappear."
+        )
         self.fields["api_enabled"].help_text = _(
             "Answers three questions without a login: whether a duty runs now, when the next "
             "one starts and which weekdays of this week carry one. No personal data is shared."
@@ -306,11 +314,21 @@ class PeriodForm(RuleForm):
         label=_("Last day"), widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")
     )
     creation_key = forms.UUIDField(widget=forms.HiddenInput)
+    remind_next = forms.BooleanField(
+        label=_("Remind me to plan the next period"),
+        required=False,
+        help_text=_("You get one message on that day, with a link to a new planning period."),
+    )
+    next_reminder_date = forms.DateField(
+        label=_("Remind me on"),
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+    )
 
     class Meta(RuleForm.Meta):
         fields = [name for name in RULE_FIELDS if name not in GLOBAL_FIELDS]
 
-    def __init__(self, *args, defaults, **kwargs):
+    def __init__(self, *args, defaults, reminder_weeks, **kwargs):
         super().__init__(*args, **kwargs)
         for name in GLOBAL_FIELDS:
             self.fields.pop(name, None)
@@ -322,6 +340,24 @@ class PeriodForm(RuleForm):
             self.fields["exclude_holidays"].help_text = _(
                 "Configure a holiday region in the planning settings to use this."
             )
+        self.reminder_weeks = reminder_weeks
+        if self.is_bound:
+            # The reminder step is only rendered after the dates, so on the way there the
+            # form answers for itself: reminder on, at the suggested day.
+            self.data = self.data.copy()
+            if "reminder_ready" not in self.data:
+                self.data["remind_next"] = "on"
+                self.data["next_reminder_date"] = ""
+            if self.data.get("remind_next") and not self.data.get("next_reminder_date"):
+                self.data["next_reminder_date"] = self.suggested_reminder()
+
+    def suggested_reminder(self):
+        """Some weeks before this period ends, so there is time to plan the next one."""
+        try:
+            end = date.fromisoformat(self.data.get("end_date", ""))
+        except ValueError:
+            return ""
+        return (end - timedelta(weeks=self.reminder_weeks)).isoformat()
 
     def clean(self):
         cleaned = super().clean()
@@ -331,7 +367,21 @@ class PeriodForm(RuleForm):
             and cleaned["start_date"] > cleaned["end_date"]
         ):
             self.add_error("end_date", _("The last day must not precede the first day."))
+        if cleaned.get("remind_next"):
+            day = cleaned.get("next_reminder_date")
+            if not day:
+                self.add_error("next_reminder_date", _("Choose the day of the reminder."))
+            elif day <= timezone.localdate():
+                self.add_error("next_reminder_date", _("The reminder has to be in the future."))
+            elif cleaned.get("end_date") and day > cleaned["end_date"]:
+                self.add_error(
+                    "next_reminder_date",
+                    _("A reminder after the period has ended comes too late to be useful."),
+                )
         return cleaned
+
+    def reminder_day(self):
+        return self.cleaned_data["next_reminder_date"] if self.cleaned_data["remind_next"] else None
 
     def rules(self):
         return {

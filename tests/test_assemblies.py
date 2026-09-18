@@ -272,3 +272,14 @@ def test_the_invitation_goes_out_once_the_transaction_commits(
         assembly = call(planning_data, assembly_type, silent=False)
         assert not calls  # nothing leaves the building before the assembly exists
     assert calls == ["sent"] and assembly.invited_at is not None
+
+
+@pytest.mark.django_db
+def test_an_assembly_without_a_shift_counts_everybody_as_unanswered(planning_data, assembly_type):
+    from ephios_shift_coordination.assemblies import attendance
+
+    assembly = call(planning_data, assembly_type)
+    Shift.objects.filter(event=assembly.event).delete()
+    counted = attendance(assembly)
+    assert counted["invited"] == 3 and len(counted["quiet"]) == 3
+    assert counted["yes"] == [] and counted["no"] == []

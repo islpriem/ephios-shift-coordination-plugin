@@ -5,7 +5,8 @@ from django.core.exceptions import PermissionDenied
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
-from ephios_shift_coordination.minutes import display_name, file_minutes, remove, visible
+from ephios_shift_coordination.assemblies import listed
+from ephios_shift_coordination.minutes import display_name, file_minutes, remove
 from ephios_shift_coordination.models import AssemblyMinutes
 
 from .test_assemblies import call
@@ -55,8 +56,8 @@ def test_only_a_responsible_may_file_or_delete_minutes(planning_data, assembly_t
 def test_minutes_are_only_listed_for_assemblies_somebody_may_see(planning_data, assembly_type):
     assembly = call(planning_data, assembly_type)
     file_minutes(planning_data.coordinator, assembly, pdf())
-    assert visible(planning_data.member).count() == 1
-    assert visible(planning_data.outsider).count() == 0
+    assert listed(planning_data.member).count() == 1
+    assert listed(planning_data.outsider).count() == 0
 
 
 @pytest.mark.django_db
@@ -65,10 +66,10 @@ def test_the_search_matches_title_kind_agenda_and_date(planning_data, assembly_t
     file_minutes(planning_data.coordinator, assembly, pdf())
     day = assembly.event.shifts.first().start_time
     for term in ("Monthly", "Team meeting", "Duty plan", str(day.year), "nothing here"):
-        found = visible(planning_data.member, term).count()
+        found = listed(planning_data.member, search=term).count()
         assert found == (0 if term == "nothing here" else 1), term
-    assert visible(planning_data.member, day.strftime("%d.%m.%Y")).count() == 1
-    assert visible(planning_data.member, "Monthly Welcome").count() == 1
+    assert listed(planning_data.member, search=day.strftime("%d.%m.%Y")).count() == 1
+    assert listed(planning_data.member, search="Monthly Welcome").count() == 1
 
 
 @pytest.mark.django_db
@@ -90,12 +91,10 @@ def test_the_pages_file_find_and_delete_minutes(planning_data, client, assembly_
     client.force_login(planning_data.coordinator)
     assert client.post(url("minutes_upload", assembly.pk), {"file": pdf()}).status_code == 302
     minutes = AssemblyMinutes.objects.get()
-    page = client.get(url("minutes_list"), {"q": "Monthly"}).content.decode()
-    assert "Monthly meeting" in page
-    assert (
-        client.get(url("minutes_list"), {"q": "Nothing"}).content.decode().count("list-group-item")
-        == 1
-    )
+    # The assembly list is where minutes are found: one button per filed document.
+    found = url("minutes_file", minutes.pk)
+    assert found in client.get(url("assembly_list"), {"q": "Monthly"}).content.decode()
+    assert found not in client.get(url("assembly_list"), {"q": "Nothing"}).content.decode()
     assert client.post(url("minutes_delete", minutes.pk)).status_code == 302
     assert not AssemblyMinutes.objects.exists()
 
@@ -136,7 +135,7 @@ def test_an_iso_date_finds_the_minutes_as_well(planning_data, assembly_type):
     assembly = call(planning_data, assembly_type)
     file_minutes(planning_data.coordinator, assembly, pdf())
     day = assembly.event.shifts.first().start_time.date()
-    assert visible(planning_data.member, day.isoformat()).count() == 1
+    assert listed(planning_data.member, search=day.isoformat()).count() == 1
 
 
 @pytest.mark.django_db

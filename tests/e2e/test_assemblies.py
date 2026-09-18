@@ -149,8 +149,9 @@ print('reminded')
             with coordinator.expect_navigation(wait_until="domcontentloaded"):
                 coordinator.get_by_role("button", name="Protokoll ablegen").click()
             expect(coordinator.get_by_text("abgelegt am", exact=False).first).to_be_visible()
-            coordinator.goto(f"{base}/shift-coordination/minutes/?q=Akzeptanzversammlung")
-            link = coordinator.get_by_role("link", name="Akzeptanzversammlung", exact=False).first
+            # The one assembly page is where minutes are found again.
+            coordinator.goto(f"{base}/shift-coordination/assemblies/?q=Akzeptanzversammlung")
+            link = coordinator.locator('a[href*="/minutes/"][href$="/file/"]').first
             expect(link).to_be_visible()
             served = coordinator.request.get(f"{base}{link.get_attribute('href')}")
             assert served.status == 200

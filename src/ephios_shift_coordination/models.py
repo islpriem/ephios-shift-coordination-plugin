@@ -27,6 +27,8 @@ INSTANCE_SETTINGS = (
     "service_reminder_time",
     "assembly_reminder_days",
     "assembly_reminder_time",
+    "next_period_weeks",
+    "hide_working_hours",
     "api_enabled",
 )
 
@@ -67,6 +69,12 @@ class PlanningSettings(models.Model):
         _("Assembly reminders in days before"), default=list, blank=True
     )
     assembly_reminder_time = models.TimeField(_("Assembly reminder time"), default=nine_o_clock)
+    next_period_weeks = models.PositiveSmallIntegerField(
+        _("Remind about the next period this many weeks before the end"),
+        default=2,
+        validators=[MinValueValidator(1)],
+    )
+    hide_working_hours = models.BooleanField(_("Hide the working hours"), default=False)
     api_enabled = models.BooleanField(_("Public duty information"), default=False)
     api_event_types = models.ManyToManyField(
         "core.EventType", verbose_name=_("Event types in the public information"), blank=True
@@ -213,6 +221,8 @@ class PlanningPeriod(models.Model):
     # Recommended personal maximum and the capacity estimate it is based on.
     suggestion = models.JSONField(default=dict)
     creation_key = models.UUIDField(default=uuid.uuid4, unique=True)
+    # The day the coordinator wants to be reminded to plan the period after this one.
+    next_reminder_on = models.DateField(null=True)
     request_digest = models.CharField(max_length=64)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, models.SET_NULL, null=True)
     created_at = models.DateTimeField(auto_now_add=True)

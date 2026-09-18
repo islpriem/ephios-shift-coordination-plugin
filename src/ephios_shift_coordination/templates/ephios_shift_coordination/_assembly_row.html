@@ -1,29 +1,65 @@
 {% load i18n %}
-<a class="list-group-item list-group-item-action"
-   href="{{ row.assembly.event.get_absolute_url }}">
-    <div class="d-flex flex-wrap align-items-center gap-2">
-        <span class="fw-semibold">{{ row.assembly.event.title }}</span>
-        {% if row.answer.yes %}
-            <span class="badge text-bg-success"><i class="fas fa-check"
-   aria-hidden="true"></i> {% translate "You said yes" %}</span>
-        {% elif row.answer.no %}
-            <span class="badge text-bg-secondary"><i class="fas fa-times"
-   aria-hidden="true"></i> {% translate "You said no" %}</span>
-        {% else %}
-            <span class="badge text-bg-warning"><i class="far fa-clock"
-   aria-hidden="true"></i> {% translate "No answer yet" %}</span>
-        {% endif %}
-        {% if not row.assembly.invited_at %}
-            <span class="badge text-bg-light">{% translate "not invited yet" %}</span>
-        {% endif %}
-    </div>
-    <div class="text-body-secondary small">
-        <i class="far fa-calendar" aria-hidden="true"></i>
-        {{ row.shift.start_time|date:"DATETIME_FORMAT" }} – {{ row.shift.end_time|date:"TIME_FORMAT" }}
-        {% if row.assembly.event.location %}
-            · <i class="fas fa-map-marker-alt"
+<li class="list-group-item">
+    <div class="d-flex flex-column flex-sm-row justify-content-between align-items-start gap-2">
+        <div class="me-auto">
+            <a class="fw-semibold"
+               href="{{ row.assembly.event.get_absolute_url }}">{{ row.assembly.event.title }}</a>
+            <div class="text-body-secondary small">
+                <i class="far fa-calendar" aria-hidden="true"></i>
+                {{ row.shift.start_time|date:"DATETIME_FORMAT" }} – {{ row.shift.end_time|date:"TIME_FORMAT" }}
+                {% if row.assembly.event.location %}
+                    · <i class="fas fa-map-marker-alt"
     aria-hidden="true"></i> {{ row.assembly.event.location }}
-        {% endif %}
-        · <i class="fas fa-tag" aria-hidden="true"></i> {{ row.assembly.event.type }}
+                {% endif %}
+                · <i class="fas fa-tag" aria-hidden="true"></i> {{ row.assembly.event.type }}
+            </div>
+        </div>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            {% if row.answer.yes %}
+                <span class="badge text-bg-success"><i class="fas fa-check"
+   aria-hidden="true"></i> {% translate "You said yes" %}</span>
+            {% elif row.answer.no %}
+                <span class="badge text-bg-secondary"><i class="fas fa-times"
+   aria-hidden="true"></i> {% translate "You said no" %}</span>
+            {% elif row.options.yes or row.options.no %}
+                <span class="badge text-bg-warning"><i class="far fa-clock"
+   aria-hidden="true"></i> {% translate "No answer yet" %}</span>
+            {% endif %}
+            {% for record in row.minutes %}
+                <a class="btn btn-sm btn-outline-primary"
+                   href="{% url 'ephios_shift_coordination:minutes_file' record.pk %}"
+                   target="_blank"
+                   rel="noopener"
+                   data-bs-toggle="tooltip"
+                   title="{% blocktranslate with moment=record.uploaded_at|date:'SHORT_DATE_FORMAT' %}Assembly minutes, filed on {{ moment }}{% endblocktranslate %}">
+                    <i class="far fa-file-pdf" aria-hidden="true"></i>
+                    <span class="d-sm-none">{% translate "Assembly minutes" %}</span>
+                </a>
+            {% endfor %}
+            {% if row.options.yes or row.options.no %}
+                <form method="post"
+                      class="d-flex gap-2"
+                      action="{% url 'ephios_shift_coordination:assembly_answer' row.assembly.pk %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    {% if row.options.yes %}
+                        <button type="submit"
+                                name="action"
+                                value="yes"
+                                class="btn btn-sm btn-success">
+                            <i class="fas fa-check" aria-hidden="true"></i> {% translate "Yes" %}
+                        </button>
+                    {% endif %}
+                    {% if row.options.no %}
+                        <button type="submit"
+                                name="action"
+                                value="no"
+                                class="btn btn-sm btn-outline-danger">
+                            <i class="fas fa-times" aria-hidden="true"></i> {% translate "No" %}
+                        </button>
+                    {% endif %}
+                </form>
+            {% endif %}
+        </div>
     </div>
-</a>
+</li>

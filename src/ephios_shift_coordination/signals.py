@@ -4,6 +4,7 @@ from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from ephios.core.signals import (
     HTML_EVENT_INFO,
+    HTML_HEAD,
     insert_html,
     nav_link,
     periodic_signal,
@@ -22,31 +23,33 @@ from .models import PlannedEvent, SurveyResponse
 def navigation(sender, request, **kwargs):
     if not request.user.is_authenticated or not request.user.is_active:
         return []
+    surveys = reverse("ephios_shift_coordination:survey_list")
+    periods = reverse("ephios_shift_coordination:period_list")
+    assemblies = reverse("ephios_shift_coordination:assembly_list")
     links = []
     if can_plan(request.user):
-        links.append(
+        # Coordinators have two places to go, so they get a menu; everybody else only ever
+        # needs the surveys and is better served by one click than by a menu with one entry.
+        links += [
             {
-                "label": _("Shift coordination"),
-                "url": reverse("ephios_shift_coordination:period_list"),
-                "active": request.path.startswith(reverse("ephios_shift_coordination:period_list")),
-            }
+                "label": _("Availability surveys"),
+                "url": surveys,
+                "active": request.path == surveys,
+                "group": _("Shift coordination"),
+            },
+            {
+                "label": _("Planning periods"),
+                "url": periods,
+                "active": request.path.startswith(periods),
+                "group": _("Shift coordination"),
+            },
+        ]
+    else:
+        links.append(
+            {"label": _("Availability surveys"), "url": surveys, "active": request.path == surveys}
         )
     links.append(
-        {
-            "label": _("Surveys"),
-            "url": reverse("ephios_shift_coordination:survey_list"),
-            "active": request.path == reverse("ephios_shift_coordination:survey_list"),
-        }
-    )
-    # Assemblies and their minutes share one entry with two tabs: a separate entry for the
-    # minutes made the navigation bar wrap its words at ordinary laptop widths.
-    links.append(
-        {
-            "label": _("Assemblies"),
-            "url": reverse("ephios_shift_coordination:assembly_list"),
-            "active": request.path.startswith(reverse("ephios_shift_coordination:assembly_list"))
-            or request.path.startswith(reverse("ephios_shift_coordination:minutes_list")),
-        }
+        {"label": _("Assemblies"), "url": assemblies, "active": request.path.startswith(assemblies)}
     )
     return links
 
@@ -87,6 +90,13 @@ def permission_fields(sender, **kwargs):
     ]
 
 
+@receiver(insert_html, sender=HTML_HEAD, dispatch_uid="shift_coordination.head")
+def head(sender, request, **kwargs):
+    from .working_hours import style
+
+    return style(request)
+
+
 @receiver(insert_html, sender=HTML_EVENT_INFO, dispatch_uid="shift_coordination.event_info")
 def event_info(sender, request, event, **kwargs):
     from .models import PlanningPeriod
@@ -119,7 +129,7 @@ def event_info(sender, request, event, **kwargs):
 
 def assembly_info(request, event):
     """The agenda and the invitation state, shown on the native event page."""
-    from .assemblies import answer_state, invited, shift_of
+    from .assemblies import answer_state, attendance, shift_of
     from .forms import MinutesForm
     from .models import Assembly
     from .reminders import overview
@@ -135,7 +145,7 @@ def assembly_info(request, event):
             "agenda": [line.strip() for line in assembly.agenda.splitlines() if line.strip()],
             "answer": answer_state(assembly, request.user),
             "responsible": responsible,
-            "recipients": invited(event) if responsible else [],
+            "attendance": attendance(assembly) if responsible else None,
             "minutes": assembly.minutes.all(),
             "minutes_form": MinutesForm(),
             "reminders": overview(shift_of(assembly))
@@ -151,6 +161,7 @@ def notification_types(sender, **kwargs):
     from .notifications import (
         AssemblyInvitation,
         AssemblyReminder,
+        NextPeriodDue,
         PlanPublished,
         ServiceReminder,
         ShiftUnderstaffed,
@@ -168,6 +179,7 @@ def notification_types(sender, **kwargs):
         AssemblyInvitation,
         AssemblyReminder,
         ServiceReminder,
+        NextPeriodDue,
     ]
 
 
@@ -176,9 +188,10 @@ def survey_periodic(sender, **kwargs):
     from django.db import transaction
     from ephios.core.services.notifications.backends import send_all_notifications
 
-    from .reminders import process_reminders
+    from .reminders import process_period_reminders, process_reminders
     from .surveys import process_surveys
 
     process_surveys()
     process_reminders()
+    process_period_reminders()
     transaction.on_commit(send_all_notifications)

@@ -9,7 +9,7 @@ from ephios.core.models import AbstractParticipation, Event, LocalParticipation,
 from ephios.core.models.users import Notification
 
 from ephios_shift_coordination.models import Assembly, PlanningSettings, ReminderDispatch
-from ephios_shift_coordination.notifications import AssemblyReminder
+from ephios_shift_coordination.notifications import AssemblyReminder, NextPeriodDue
 from ephios_shift_coordination.reminders import process_reminders
 
 from .test_assemblies import call
@@ -240,3 +240,56 @@ def test_an_assembly_reminder_reads_like_the_invitation(planning_data, assembly_
     assert "Welcome" in str(notification.body) and "answer here" in str(notification.body)
     Assembly.objects.all().delete()
     assert str(notification.subject) == str(AssemblyReminder.title)
+
+
+@pytest.mark.django_db
+def test_the_creator_is_reminded_to_plan_the_period_after_this_one(planning_data, clock):
+    from ephios_shift_coordination.models import NotificationDispatch, PlanningPeriod
+    from ephios_shift_coordination.reminders import process_period_reminders
+
+    period = PlanningPeriod.objects.create(
+        template=planning_data.template,
+        start_date=datetime(2026, 10, 1).date(),
+        end_date=datetime(2026, 10, 31).date(),
+        timezone="Europe/Berlin",
+        rules={},
+        template_snapshot={"title": "Duty"},
+        next_reminder_on=datetime(2026, 10, 17).date(),
+        created_by=planning_data.coordinator,
+    )
+    clock(datetime(2026, 10, 16, 8, tzinfo=UTC))
+    process_period_reminders()
+    assert not Notification.objects.filter(slug="shift_coordination_next_period").exists()
+    clock(datetime(2026, 10, 17, 8, tzinfo=UTC))
+    process_period_reminders()
+    process_period_reminders()  # a second run the same day changes nothing
+    notification = Notification.objects.get(slug="shift_coordination_next_period")
+    assert notification.user == planning_data.coordinator
+    assert "Plan the period after" in str(notification.subject)
+    assert "10/01/2026" in str(notification.subject)
+    assert "ends soon" in str(notification.body)
+    assert "/shift-coordination/planning/new/" in notification.get_actions()[0][1]
+    assert not notification.is_obsolete
+    assert NotificationDispatch.objects.filter(kind="next_period").count() == 1
+    period.delete()
+    assert str(notification.body) == "" and notification.is_obsolete
+    assert str(notification.subject) == str(NextPeriodDue.title)
+
+
+@pytest.mark.django_db
+def test_a_period_without_a_wish_reminds_nobody(planning_data, clock):
+    from ephios_shift_coordination.models import PlanningPeriod
+    from ephios_shift_coordination.reminders import process_period_reminders
+
+    PlanningPeriod.objects.create(
+        template=planning_data.template,
+        start_date=datetime(2026, 10, 1).date(),
+        end_date=datetime(2026, 10, 31).date(),
+        timezone="Europe/Berlin",
+        rules={},
+        template_snapshot={"title": "Duty"},
+        created_by=planning_data.coordinator,
+    )
+    clock(datetime(2026, 11, 1, 8, tzinfo=UTC))
+    process_period_reminders()
+    assert not Notification.objects.filter(slug="shift_coordination_next_period").exists()
