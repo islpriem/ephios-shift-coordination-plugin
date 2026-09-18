@@ -51,7 +51,7 @@
                             {% endif %}
                         </span>
                         <span class="d-flex flex-wrap gap-2">
-                            <a class="btn btn-sm btn-outline-secondary"
+                            <a class="btn btn-sm btn-outline-primary"
                                href="{% url 'ephios_shift_coordination:replacement' row.link.pk %}">
                                 <i class="fas fa-people-arrows"
                                    aria-hidden="true"></i> {% translate "Find a replacement" %}
@@ -82,7 +82,7 @@
         {{ form.expected_version }}
         <section class="sc-card">
             <h2 class="sc-card-title">
-                <i class="fas fa-hashtag"
+                <i class="fas fa-list-ol"
                    aria-hidden="true"></i> {% translate "How many shifts can you take?" %}
             </h2>
             <div class="sc-card-body">
@@ -127,7 +127,9 @@
                             <tr>
                                 <th rowspan="2" scope="col">{% translate "Service" %}</th>
                                 {% for column in form.columns %}
-                                    <th colspan="4" scope="colgroup" class="text-center">
+                                    <th colspan="4"
+                                        scope="colgroup"
+                                        class="text-center sc-service-head sc-col-start">
                                         {{ column.label }}
                                         <div class="fw-normal small text-body-secondary">{{ column.time }}</div>
                                     </th>
@@ -201,7 +203,7 @@
                                         class="sc-day-cell">{% translate "All dates" %}</th>
                                     {% for column in form.columns %}
                                         {% for value, label in form.scale %}
-                                            <td class="sc-rate sc-r-{{ value }}">
+                                            <td class="sc-rate sc-r-{{ value }}{% if forloop.first %} sc-col-start{% endif %}">
                                                 <button type="button"
                                                         class="sc-fill-button"
                                                         data-column="{{ column.key }}"

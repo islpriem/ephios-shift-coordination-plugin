@@ -189,12 +189,12 @@ function shiftCard(shift, parent) {
     };
     const add = element("button", words.add, buttons);
     add.type = "button";
-    add.className = "btn btn-sm btn-outline-secondary";
+    add.className = "btn btn-sm btn-outline-primary";
     add.addEventListener("click", () => insert(false));
     if (data.allow_observers) {
         const sit = element("button", words.addObserver, buttons);
         sit.type = "button";
-        sit.className = "btn btn-sm btn-outline-secondary";
+        sit.className = "btn btn-sm btn-outline-primary";
         sit.addEventListener("click", () => insert(true));
     }
 }

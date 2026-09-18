@@ -78,3 +78,40 @@ def test_every_plugin_string_has_a_reviewed_german_translation():
     assert [msgid for msgid, msgstr in entries if msgstr == '""' and msgid != '""'] == []
     # Fuzzy entries are guesses that Django would not use, obsolete ones are dead weight.
     assert "#, fuzzy" not in catalog and "#~" not in catalog
+
+
+def plugin_assets(suffix):
+    from pathlib import Path
+
+    root = Path("src/ephios_shift_coordination")
+    return sorted(root.glob(f"templates/ephios_shift_coordination/*{suffix}")) + sorted(
+        root.glob(f"static/ephios_shift_coordination/*{suffix}")
+    )
+
+
+def test_no_interface_element_uses_the_muted_secondary_button():
+    """The secondary button reads as disabled in the ephios colour scheme."""
+    offenders = [
+        path.name
+        for suffix in (".html", ".js")
+        for path in plugin_assets(suffix)
+        if "btn-outline-secondary" in path.read_text() or "btn-secondary" in path.read_text()
+    ]
+    assert offenders == []
+
+
+def test_every_availability_rating_has_its_own_column_colour():
+    import re
+    from pathlib import Path
+
+    style = Path(
+        "src/ephios_shift_coordination/static/ephios_shift_coordination/planning.css"
+    ).read_text()
+    tints = {}
+    for value in ("unavailable", "if_needed", "available", "preferred"):
+        match = re.search(rf"\.sc-r-{value} \{{(.*?)\}}", style, re.S)
+        assert match, value
+        tints[value] = re.search(r"--sc-tint: ([^;]+);", match.group(1)).group(1)
+    assert len(set(tints.values())) == len(tints), tints
+    # The rating columns are separated by their own edge colour, not only by the first one.
+    assert "border-inline: 1px solid var(--sc-edge)" in style

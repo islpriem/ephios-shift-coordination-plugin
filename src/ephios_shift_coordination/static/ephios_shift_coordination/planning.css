@@ -85,7 +85,7 @@
 .sc-r-unavailable { --sc-tint: var(--bs-danger-bg-subtle); --sc-edge: var(--bs-danger-border-subtle); --sc-ink: var(--bs-danger-text-emphasis); }
 .sc-r-if_needed { --sc-tint: var(--bs-warning-bg-subtle); --sc-edge: var(--bs-warning-border-subtle); --sc-ink: var(--bs-warning-text-emphasis); }
 .sc-r-available { --sc-tint: var(--bs-success-bg-subtle); --sc-edge: var(--bs-success-border-subtle); --sc-ink: var(--bs-success-text-emphasis); }
-.sc-r-preferred { --sc-tint: var(--bs-success-bg-subtle); --sc-edge: var(--bs-success-text-emphasis); --sc-ink: var(--bs-success-text-emphasis); }
+.sc-r-preferred { --sc-tint: var(--bs-primary-bg-subtle); --sc-edge: var(--bs-primary-border-subtle); --sc-ink: var(--bs-primary-text-emphasis); }
 .sc-observer { --sc-tint: var(--bs-info-bg-subtle); --sc-edge: var(--bs-info-border-subtle); --sc-ink: var(--bs-info-text-emphasis); }
 .sc-r-missing { --sc-tint: var(--bs-secondary-bg); --sc-edge: var(--bs-border-color); --sc-ink: var(--bs-secondary-color); }
 
@@ -184,12 +184,20 @@
 .sc-survey-table th, .sc-survey-table td { vertical-align: middle; text-align: center; }
 .sc-survey-table thead th { border-bottom-width: 1px; }
 .sc-day-cell { text-align: start !important; white-space: nowrap; }
-.sc-rate {
-    background: var(--sc-tint);
+/* Bootstrap paints every cell with --bs-table-bg, which outranks a plain class rule.
+   Setting the variable per cell is what actually tints the column. */
+.sc-survey-table .sc-rate {
+    --bs-table-bg: var(--sc-tint);
+    background-color: var(--sc-tint);
     color: var(--sc-ink);
+    border-inline: 1px solid var(--sc-edge);
     padding: .3rem .35rem;
 }
-.sc-col-start { border-left: 2px solid var(--bs-border-color); }
+.sc-survey-table .sc-service-head {
+    --bs-table-bg: var(--bs-secondary-bg);
+    background-color: var(--bs-secondary-bg);
+}
+.sc-col-start { border-left: 2px solid var(--bs-border-color) !important; }
 .sc-rate input { width: 1.15rem; height: 1.15rem; margin: 0; }
 .sc-empty-cell { color: var(--bs-secondary-color); }
 .sc-observer-head { min-width: 3rem; }

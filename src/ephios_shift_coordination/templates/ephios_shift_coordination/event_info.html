@@ -1,5 +1,5 @@
 {% load i18n %}
-<div class="sc-event-info">
+<div class="sc-event-info mb-3">
     <div class="d-flex flex-wrap align-items-center gap-2">
         <span class="fw-semibold"><i class="fas fa-calendar-check"
    aria-hidden="true"></i> {% translate "Shift coordination" %}</span>
@@ -52,7 +52,7 @@
                                     </button>
                                 {% endif %}
                                 {% if state.can_observe %}
-                                    <button class="btn btn-sm btn-outline-secondary"
+                                    <button class="btn btn-sm btn-outline-primary"
                                             type="submit"
                                             name="action"
                                             value="observe">
