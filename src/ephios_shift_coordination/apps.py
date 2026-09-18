@@ -12,4 +12,4 @@ class PluginApp(PluginConfig):
         description = _("Availability surveys and service planning for ephios")
 
     def ready(self):
-        from . import signals  # noqa: F401
+        from . import preferences, signals  # noqa: F401

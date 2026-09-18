@@ -4,7 +4,7 @@ from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from ephios.core.dynamic_preferences_registry import GeneralRequiredQualificationPreference
-from ephios.core.models import Event, Qualification
+from ephios.core.models import Event, EventType, Qualification
 from ephios.core.services.qualification import collect_all_included_qualifications
 from guardian.shortcuts import get_objects_for_user
 
@@ -140,3 +140,34 @@ def check_structure(period, user=None):
     if period.opened_at and requirements != period.opened_structure:
         raise Conflict(_("Event type qualifications have changed since the survey opened."))
     return shifts, requirements
+
+
+def type_option(event_type, name):
+    return event_type.preferences[f"shift_coordination__{name}"]
+
+
+def is_service(event_type):
+    return bool(type_option(event_type, "is_service"))
+
+
+def is_assembly(event_type):
+    return bool(type_option(event_type, "is_assembly"))
+
+
+def assembly_types():
+    """Event types that may be used to call an assembly; there are only a handful of types."""
+    return [
+        event_type for event_type in EventType.objects.order_by("title") if is_assembly(event_type)
+    ]
+
+
+def assembly_defaults(event_type):
+    """What the assembly form starts with, all of it already stored on the event type."""
+    return {
+        "title": type_option(event_type, "assembly_title") or event_type.title,
+        "location": type_option(event_type, "assembly_location"),
+        "description": event_type.default_description,
+        "visible_for": event_type.preferences["visible_for"],
+        "responsible_groups": event_type.preferences["responsible_groups"],
+        "responsible_users": event_type.preferences["responsible_users"],
+    }
