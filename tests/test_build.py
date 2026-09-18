@@ -22,7 +22,16 @@ def test_build_produces_an_installable_wheel_and_minimal_container_context():
         names = [Path(name).parts[1:] for name in archive.getnames()]
     assert all(
         parts[0]
-        in {"src", "pyproject.toml", "uv.lock", "README.md", "LICENSE", "PKG-INFO", ".gitignore"}
+        in {
+            "src",
+            "pyproject.toml",
+            "uv.lock",
+            "README.md",
+            "CHANGELOG.md",
+            "LICENSE",
+            "PKG-INFO",
+            ".gitignore",
+        }
         for parts in names
         if parts
     )

@@ -1,0 +1,85 @@
+name: Release
+
+# A release is a version bump: raising `version` in pyproject.toml on main publishes it.
+# Pushes that leave the version alone stop after the tag check a few seconds in.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+      release: ${{ steps.read.outputs.release }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+      - id: read
+        name: Read the version and look for its tag
+        run: |
+          version="$(python3 -c 'import tomllib, pathlib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"])')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git rev-parse --verify --quiet "refs/tags/v$version" > /dev/null; then
+            echo "Version $version is already released." >> "$GITHUB_STEP_SUMMARY"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Releasing version $version." >> "$GITHUB_STEP_SUMMARY"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # main is not checked by the Check workflow itself, so every commit is verified exactly once.
+  check:
+    needs: version
+    if: needs.version.outputs.release == 'true'
+    uses: ./.github/workflows/check.yml
+
+  publish:
+    needs: [version, check]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      packages: write
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Build the wheel, the source archive and the image context
+        run: |
+          mkdir -p .local/bin .cache/uv-download
+          curl --fail --location https://github.com/astral-sh/uv/releases/download/0.12.8/uv-x86_64-unknown-linux-gnu.tar.gz -o .cache/uv-download/uv.tar.gz
+          tar -xzf .cache/uv-download/uv.tar.gz -C .cache/uv-download
+          cp .cache/uv-download/uv-x86_64-unknown-linux-gnu/uv .local/bin/uv
+          export PATH="$PWD/.local/bin:$PATH"
+          scripts/run uv python install 3.14
+          make build
+      - name: Push the image
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker build --tag "$image:$VERSION" --tag "$image:latest" .local/build
+          docker push "$image:$VERSION"
+          docker push "$image:latest"
+      - name: Tag the commit and publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag --annotate "v$VERSION" --message "ephios shift coordination $VERSION"
+          git push origin "v$VERSION"
+          gh release create "v$VERSION" dist/* --title "$VERSION" --generate-notes

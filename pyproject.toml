@@ -23,7 +23,15 @@ build-backend = "hatchling.build"
 packages = ["src/ephios_shift_coordination"]
 
 [tool.hatch.build.targets.sdist]
-include = ["/src", "/pyproject.toml", "/uv.lock", "/README.md", "/LICENSE", "/.gitignore"]
+include = [
+    "/src",
+    "/pyproject.toml",
+    "/uv.lock",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/LICENSE",
+    "/.gitignore",
+]
 
 [dependency-groups]
 dev = [
