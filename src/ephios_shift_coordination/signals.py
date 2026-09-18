@@ -38,18 +38,14 @@ def navigation(sender, request, **kwargs):
             "active": request.path == reverse("ephios_shift_coordination:survey_list"),
         }
     )
-    links.append(
-        {
-            "label": _("Assembly minutes"),
-            "url": reverse("ephios_shift_coordination:minutes_list"),
-            "active": request.path.startswith(reverse("ephios_shift_coordination:minutes_list")),
-        }
-    )
+    # Assemblies and their minutes share one entry with two tabs: a separate entry for the
+    # minutes made the navigation bar wrap its words at ordinary laptop widths.
     links.append(
         {
             "label": _("Assemblies"),
             "url": reverse("ephios_shift_coordination:assembly_list"),
-            "active": request.path.startswith(reverse("ephios_shift_coordination:assembly_list")),
+            "active": request.path.startswith(reverse("ephios_shift_coordination:assembly_list"))
+            or request.path.startswith(reverse("ephios_shift_coordination:minutes_list")),
         }
     )
     return links

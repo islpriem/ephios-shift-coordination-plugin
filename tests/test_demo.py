@@ -88,3 +88,7 @@ def test_the_demo_calls_one_invited_assembly_and_sets_reminder_rules(demo):
     assert LocalParticipation.objects.filter(shift__event=assembly.event).exists()
     rules = PlanningSettings.objects.get()
     assert rules.service_reminder_days == [1] and rules.assembly_reminder_days == [3, 1]
+    # A second import neither calls a second assembly nor invites anybody again.
+    seed_demo()
+    assert Assembly.objects.count() == 1
+    assert Notification.objects.filter(slug="shift_coordination_assembly_invitation").count() == 30

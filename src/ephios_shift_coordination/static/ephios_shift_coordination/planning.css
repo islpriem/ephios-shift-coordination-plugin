@@ -375,3 +375,9 @@ details.sc-person > .sc-person-head { cursor: pointer; }
     .sc-week-label { writing-mode: horizontal-tb; rotate: none; justify-self: start; font-weight: 600; }
     .sc-toolbar { position: static; }
 }
+
+/* A recipient list grows with the organisation; it stays a preview, not the whole page. */
+.sc-recipients {
+    max-height: 12rem;
+    overflow-y: auto;
+}

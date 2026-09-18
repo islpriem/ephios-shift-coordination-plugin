@@ -6,6 +6,7 @@
 {% block content %}
     <link rel="stylesheet"
           href="{% static 'ephios_shift_coordination/planning.css' %}">
+    {% include "ephios_shift_coordination/_assembly_tabs.html" %}
     <h1>{% translate "Assembly minutes" %}</h1>
     <p class="text-body-secondary">
         {% translate "The minutes of every assembly you may see. Search by title, kind of assembly, date or a word from the agenda." %}

@@ -26,6 +26,7 @@ from ephios_shift_coordination.assemblies import answer as answer_assembly
 from ephios_shift_coordination.assemblies import plan_assembly
 from ephios_shift_coordination.drafts import load_plan, save_draft
 from ephios_shift_coordination.models import (
+    Assembly,
     PlanningPeriod,
     PlanningSettings,
     ServiceTemplate,
@@ -295,22 +296,31 @@ def seed_demo():
     cohort, members, coordinators, skills = people()
     template = service_template(members, coordinators, skills)
     settings_row, _ = PlanningSettings.objects.get_or_create(pk=1)
-    if not settings_row.allow_observers:
-        settings_row.allow_observers = True
+    settings_row.allow_observers = True
+    if not settings_row.service_reminder_days and not settings_row.assembly_reminder_days:
         settings_row.service_reminder_days = [1]
         settings_row.assembly_reminder_days = [3, 1]
-        settings_row.save()
+    settings_row.save()
     template.event_type.preferences["shift_coordination__is_service"] = True
-    meetings = assembly_type(members, coordinators)
     preferences = global_preferences_registry.manager()
     preferences["general__enabled_plugins"] = sorted(
         set([*preferences["general__enabled_plugins"], "ephios_shift_coordination"])
     )
-    if PlanningPeriod.objects.exists():
-        return template
     coordinator = cohort[0]
     rng = random.Random(20260916)
     today = timezone.localdate()
+    # One called and invited assembly, so the whole flow can be tried straight away. It is
+    # created before the period guard below, so an existing demo stack gains it on re-import.
+    if not Assembly.objects.exists():
+        call_assembly(
+            coordinator,
+            assembly_type(members, coordinators),
+            cohort,
+            today + timedelta(days=21),
+            rng,
+        )
+    if PlanningPeriod.objects.exists():
+        return template
 
     # 1. A finished period: asked, planned and published before it started.
     past_start = today - timedelta(days=PERIOD_DAYS + 14)
@@ -367,7 +377,4 @@ def seed_demo():
         rng=rng,
         share=0.5,
     )
-
-    # 5. One assembly that has been called and invited, with about half the answers in.
-    call_assembly(coordinator, meetings, cohort, today + timedelta(days=21), rng)
     return template

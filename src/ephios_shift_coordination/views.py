@@ -622,7 +622,12 @@ def assembly_list(request):
     return render(
         request,
         "ephios_shift_coordination/assembly_list.html",
-        {"upcoming": upcoming, "past": past, "types": callable_types(request.user)},
+        {
+            "upcoming": upcoming,
+            "past": past,
+            "types": callable_types(request.user),
+            "tab": "assemblies",
+        },
     )
 
 
@@ -727,7 +732,7 @@ def minutes_list(request):
     return render(
         request,
         "ephios_shift_coordination/minutes_list.html",
-        {"minutes": visible(request.user, search), "search": search},
+        {"minutes": visible(request.user, search), "search": search, "tab": "minutes"},
     )
 
 

@@ -51,12 +51,14 @@
     {% if responsible %}
         <form method="post"
               enctype="multipart/form-data"
-              class="d-flex flex-wrap align-items-end gap-2 mt-2"
+              class="d-flex flex-wrap align-items-end gap-2 mt-3 pt-2 border-top"
               action="{% url 'ephios_shift_coordination:minutes_upload' assembly.pk %}">
             {% csrf_token %}
             <div>
-                <label class="form-label small mb-1"
-                       for="minutes-file">{% translate "File the assembly minutes as PDF" %}</label>
+                <label class="form-label small d-block mb-1"
+                       for="{{ minutes_form.file.id_for_label }}">
+                    {% translate "File the assembly minutes as PDF" %}
+                </label>
                 {{ minutes_form.file }}
             </div>
             <button type="submit" class="btn btn-sm btn-outline-primary">
