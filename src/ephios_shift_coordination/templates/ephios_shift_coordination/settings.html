@@ -71,6 +71,14 @@
             </legend>
             {{ form.solver_seconds|as_crispy_field }}
         </fieldset>
+        <fieldset class="sc-fieldset">
+            <legend class="sc-legend">
+                <i class="fas fa-tv"
+                   aria-hidden="true"></i> {% translate "Public duty information" %}
+            </legend>
+            {{ form.api_enabled|as_crispy_field }}
+            {{ form.api_event_types|as_crispy_field }}
+        </fieldset>
         <div class="alert alert-light border" role="note">
             <i class="fas fa-info-circle" aria-hidden="true"></i>
             {% translate "Coordinators additionally need the ephios rights to create events and to publish them for the groups of a service template." %}

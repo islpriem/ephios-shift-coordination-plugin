@@ -1,6 +1,6 @@
 from django.urls import include, path
 
-from . import views
+from . import api, views
 
 app_name = "ephios_shift_coordination"
 planning_patterns = [
@@ -21,6 +21,9 @@ planning_patterns = [
     path("assemblies/new/", views.assembly_create, name="assembly_create"),
     path("assemblies/<int:pk>/invite/", views.assembly_invite, name="assembly_invite"),
     path("assemblies/answer/<str:token>/", views.assembly_respond, name="assembly_respond"),
+    path("api/now/", api.now, name="api_now"),
+    path("api/next/", api.next_duty, name="api_next"),
+    path("api/week/", api.week, name="api_week"),
     path("minutes/", views.minutes_list, name="minutes_list"),
     path("minutes/<int:pk>/file/", views.minutes_file, name="minutes_file"),
     path("minutes/<int:pk>/delete/", views.minutes_delete, name="minutes_delete"),

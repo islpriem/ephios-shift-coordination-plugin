@@ -256,6 +256,22 @@ other participation. **Still einberufen** notifies nobody, and the assembly page
 invitation later, together with the date it was last sent. Sending it again is deliberate,
 for example after the agenda changed.
 
+## Public duty information
+
+Three read-only endpoints answer without a login, for a display at the station:
+
+```
+GET /shift-coordination/api/now/     {"duty": true, "until": "2026-09-18T17:00:00+02:00"}
+GET /shift-coordination/api/next/    {"start": "2026-09-19T09:00:00+02:00"}
+GET /shift-coordination/api/week/    {"from": "2026-09-14", "days": [true, false, ...]}
+```
+
+They are switched off by default and answer 404 until an administrator enables them in the
+planning settings and picks the event types to count. Only shifts that reach their minimum
+staffing count as duty, the shift time decides, and `week` covers Monday to Sunday of the
+current local week. The answers carry times and truth values only — no names, no numbers of
+people, no event titles — and `next` looks at most 90 days ahead.
+
 ## Assembly minutes
 
 Whoever is responsible for an assembly files its minutes as a PDF on the assembly page. The

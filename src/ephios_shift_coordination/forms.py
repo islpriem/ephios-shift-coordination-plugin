@@ -159,6 +159,14 @@ class SettingsForm(RuleForm):
         label=_("Remind about assemblies this many days before"), required=False
     )
 
+    api_event_types = forms.ModelMultipleChoiceField(
+        label=_("Event types in the public duty information"),
+        queryset=EventType.objects.all(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        help_text=_("Only shifts of these types are counted, and only while they are staffed."),
+    )
+
     class Meta(RuleForm.Meta):
         fields = [*RULE_FIELDS, *INSTANCE_FIELDS]
         widgets = {
@@ -175,6 +183,11 @@ class SettingsForm(RuleForm):
         for name in ("service_reminder_days", "assembly_reminder_days"):
             self.initial[name] = ", ".join(map(str, self.initial.get(name) or []))
             self.fields[name].help_text = REMINDER_HELP[name]
+        self.initial["api_event_types"] = self.instance.api_event_types.all()
+        self.fields["api_enabled"].help_text = _(
+            "Answers three questions without a login: whether a duty runs now, when the next "
+            "one starts and which weekdays of this week carry one. No personal data is shared."
+        )
 
     def clean_service_reminder_days(self):
         return offsets(self.cleaned_data["service_reminder_days"])
@@ -185,6 +198,7 @@ class SettingsForm(RuleForm):
     @transaction.atomic
     def save(self):
         instance = super().save()
+        instance.api_event_types.set(self.cleaned_data["api_event_types"])
         permission = Permission.objects.get(
             content_type__app_label="ephios_shift_coordination", codename="manage_planning"
         )

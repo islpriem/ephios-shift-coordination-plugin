@@ -27,6 +27,7 @@ INSTANCE_SETTINGS = (
     "service_reminder_time",
     "assembly_reminder_days",
     "assembly_reminder_time",
+    "api_enabled",
 )
 
 
@@ -66,6 +67,10 @@ class PlanningSettings(models.Model):
         _("Assembly reminders in days before"), default=list, blank=True
     )
     assembly_reminder_time = models.TimeField(_("Assembly reminder time"), default=nine_o_clock)
+    api_enabled = models.BooleanField(_("Public duty information"), default=False)
+    api_event_types = models.ManyToManyField(
+        "core.EventType", verbose_name=_("Event types in the public information"), blank=True
+    )
 
     class Meta:
         constraints = [
