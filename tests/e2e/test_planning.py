@@ -56,9 +56,7 @@ def test_demo_coordinator_creates_service_series_and_member_sees_event():
             login(member, "demo-003@example.invalid", "demo")
             member.locator(".navbar-toggler").click()
             expect(member.get_by_role("button", name="Dienstplanung", exact=True)).to_have_count(0)
-            expect(
-                member.get_by_role("link", name="Verfügbarkeitsumfragen", exact=True)
-            ).to_be_visible()
+            expect(member.get_by_role("link", name="Umfragen", exact=True)).to_be_visible()
             member.goto(base + event_path)
             expect(member.get_by_text("Schicht 1", exact=True)).to_be_visible()
             expect(member.get_by_text("Schicht 2", exact=True)).to_be_visible()

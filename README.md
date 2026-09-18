@@ -120,8 +120,8 @@ and service templates through ephios settings. The holiday region, the calculati
 budget and the number of regular people a shift needs besides anybody sitting in are
 instance-wide settings; periods only carry the values that differ per period.
 
-Coordinators use **Dienstplanung**, which is a menu with the surveys and the planning periods;
-members without planning rights get a single entry that goes straight to their surveys. A period
+Coordinators find surveys, planning periods and assemblies in one **Dienstplanung** menu;
+everybody else gets the surveys and the assemblies as plain entries in the same order. A period
 is created in four steps: template and date range, the single dates in the calendar, the
 reminder for the next period, then a summary of the services that will be created. Events are immediately visible according to their permissions and
 self-signup is disabled. The creator is also made responsible, in addition to the
@@ -324,10 +324,5 @@ The Docker build context contains only the wheel and Dockerfile. No development
 source checkout is mounted in the application container. All service images are
 pinned by digest. This Compose configuration is exclusively for local testing;
 production installation, updates and recovery are not yet validated.
-
-Administrators can hide the working hours instance-wide in the planning settings. Everybody
-but staff then gets 403 on their own working hour page and on the overview, and the links
-ephios writes itself disappear. This reaches into two core views on purpose: without it the
-pages stay reachable by typing their address.
 
 Never use real member data or production mail credentials for local tests.

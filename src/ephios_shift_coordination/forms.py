@@ -188,10 +188,6 @@ class SettingsForm(RuleForm):
             self.initial[name] = ", ".join(map(str, self.initial.get(name) or []))
             self.fields[name].help_text = REMINDER_HELP[name]
         self.initial["api_event_types"] = self.instance.api_event_types.all()
-        self.fields["hide_working_hours"].help_text = _(
-            "Everybody but administrators stops seeing the working hour pages, their own as "
-            "well as the overview, and the links to them disappear."
-        )
         self.fields["api_enabled"].help_text = _(
             "Answers three questions without a login: whether a duty runs now, when the next "
             "one starts and which weekdays of this week carry one. No personal data is shared."

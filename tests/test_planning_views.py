@@ -366,14 +366,19 @@ def test_the_menu_sends_members_straight_to_the_surveys_and_coordinators_to_a_me
     request = RequestFactory().get("/")
     request.user = planning_data.member
     member = navigation(None, request=request)
-    assert [item["label"] for item in member] == ["Availability surveys", "Assemblies"]
+    assert [item["label"] for item in member] == ["Surveys", "Assemblies"]
     assert not any(item.get("group") for item in member)
 
     request.user = planning_data.coordinator
     coordinator = navigation(None, request=request)
-    grouped = [item for item in coordinator if item.get("group") == "Shift coordination"]
-    assert [item["label"] for item in grouped] == ["Availability surveys", "Planning periods"]
-    assert [item["label"] for item in coordinator if not item.get("group")] == ["Assemblies"]
+    # ephios draws plain entries before the menus, so all of them have to be in the menu to
+    # keep surveys, periods and assemblies in that order for everybody.
+    assert [item["label"] for item in coordinator] == [
+        "Surveys",
+        "Planning periods",
+        "Assemblies",
+    ]
+    assert {item["group"] for item in coordinator} == {"Shift coordination"}
 
 
 def test_the_menu_stays_empty_for_anonymous_visitors(planning_data, client):

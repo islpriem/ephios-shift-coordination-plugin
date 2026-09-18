@@ -4,7 +4,6 @@ from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from ephios.core.signals import (
     HTML_EVENT_INFO,
-    HTML_HEAD,
     insert_html,
     nav_link,
     periodic_signal,
@@ -21,37 +20,32 @@ from .models import PlannedEvent, SurveyResponse
 
 @receiver(nav_link, dispatch_uid="shift_coordination.navigation")
 def navigation(sender, request, **kwargs):
+    """Always surveys, planning periods, assemblies, in that order.
+
+    ephios draws plain entries before the menus, so the plugin keeps all of its entries on
+    one side of that line: coordinators get them as one menu, everybody else as plain links.
+    """
     if not request.user.is_authenticated or not request.user.is_active:
         return []
-    surveys = reverse("ephios_shift_coordination:survey_list")
-    periods = reverse("ephios_shift_coordination:period_list")
-    assemblies = reverse("ephios_shift_coordination:assembly_list")
-    links = []
-    if can_plan(request.user):
-        # Coordinators have two places to go, so they get a menu; everybody else only ever
-        # needs the surveys and is better served by one click than by a menu with one entry.
-        links += [
-            {
-                "label": _("Availability surveys"),
-                "url": surveys,
-                "active": request.path == surveys,
-                "group": _("Shift coordination"),
-            },
-            {
-                "label": _("Planning periods"),
-                "url": periods,
-                "active": request.path.startswith(periods),
-                "group": _("Shift coordination"),
-            },
+    pages = [
+        (_("Surveys"), reverse("ephios_shift_coordination:survey_list")),
+        (_("Planning periods"), reverse("ephios_shift_coordination:period_list")),
+        (_("Assemblies"), reverse("ephios_shift_coordination:assembly_list")),
+    ]
+    if not can_plan(request.user):
+        # One click to the surveys beats a menu that would hold a single entry.
+        pages = [
+            page for page in pages if page[1] != reverse("ephios_shift_coordination:period_list")
         ]
-    else:
-        links.append(
-            {"label": _("Availability surveys"), "url": surveys, "active": request.path == surveys}
-        )
-    links.append(
-        {"label": _("Assemblies"), "url": assemblies, "active": request.path.startswith(assemblies)}
-    )
-    return links
+    return [
+        {
+            "label": label,
+            "url": url,
+            "active": request.path.startswith(url),
+            **({"group": _("Shift coordination")} if can_plan(request.user) else {}),
+        }
+        for label, url in pages
+    ]
 
 
 @receiver(settings_sections, dispatch_uid="shift_coordination.settings")
@@ -88,13 +82,6 @@ def permission_fields(sender, **kwargs):
             ),
         )
     ]
-
-
-@receiver(insert_html, sender=HTML_HEAD, dispatch_uid="shift_coordination.head")
-def head(sender, request, **kwargs):
-    from .working_hours import style
-
-    return style(request)
 
 
 @receiver(insert_html, sender=HTML_EVENT_INFO, dispatch_uid="shift_coordination.event_info")

@@ -28,7 +28,6 @@ INSTANCE_SETTINGS = (
     "assembly_reminder_days",
     "assembly_reminder_time",
     "next_period_weeks",
-    "hide_working_hours",
     "api_enabled",
 )
 
@@ -74,7 +73,6 @@ class PlanningSettings(models.Model):
         default=2,
         validators=[MinValueValidator(1)],
     )
-    hide_working_hours = models.BooleanField(_("Hide the working hours"), default=False)
     api_enabled = models.BooleanField(_("Public duty information"), default=False)
     api_event_types = models.ManyToManyField(
         "core.EventType", verbose_name=_("Event types in the public information"), blank=True
