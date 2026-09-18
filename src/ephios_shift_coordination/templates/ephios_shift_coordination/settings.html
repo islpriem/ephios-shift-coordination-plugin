@@ -54,6 +54,19 @@
         </fieldset>
         <fieldset class="sc-fieldset">
             <legend class="sc-legend">
+                <i class="far fa-bell" aria-hidden="true"></i> {% translate "Reminders" %}
+            </legend>
+            <div class="row">
+                <div class="col-md-8">{{ form.service_reminder_days|as_crispy_field }}</div>
+                <div class="col-md-4">{{ form.service_reminder_time|as_crispy_field }}</div>
+            </div>
+            <div class="row">
+                <div class="col-md-8">{{ form.assembly_reminder_days|as_crispy_field }}</div>
+                <div class="col-md-4">{{ form.assembly_reminder_time|as_crispy_field }}</div>
+            </div>
+        </fieldset>
+        <fieldset class="sc-fieldset">
+            <legend class="sc-legend">
                 <i class="fas fa-magic" aria-hidden="true"></i> {% translate "Automatic proposal" %}
             </legend>
             {{ form.solver_seconds|as_crispy_field }}

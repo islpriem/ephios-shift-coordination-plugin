@@ -1,4 +1,4 @@
-"""Business messages: survey, published plan, staffing changes and assembly invitations."""
+"""Business messages: survey, published plan, staffing, assemblies and reminders."""
 
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -7,13 +7,21 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _
-from ephios.core.models import AbstractParticipation
+from ephios.core.models import AbstractParticipation, Shift
 from ephios.core.models.users import Notification
 from ephios.core.services.notifications.types import AbstractNotificationHandler
 from ephios.core.templatetags.settings_extras import make_absolute
 
-from .models import Assembly, PlannedShift, PlanningPeriod, SurveyResponse
+from .models import (
+    Assembly,
+    ObserverParticipation,
+    PlannedShift,
+    PlanningPeriod,
+    SurveyResponse,
+)
 from .surveys import recommendation, response_is_actionable
+
+CONFIRMED = AbstractParticipation.States.CONFIRMED
 
 
 def period_label(period):
@@ -515,3 +523,113 @@ class AssemblyInvitation(AbstractNotificationHandler):
         assembly = cls.assembly(notification)
         shift = assembly.event.shifts.first() if assembly else None
         return not enabled() or shift is None or shift.end_time <= timezone.now()
+
+
+class ServiceReminder(AbstractNotificationHandler):
+    """Shortly before a service: who is on duty, when, where and with whom."""
+
+    slug = "shift_coordination_service_reminder"
+    title = _("Reminder about a service you are staffed for")
+
+    @classmethod
+    def shift(cls, notification):
+        return (
+            Shift.objects.filter(pk=notification.data["shift_id"]).select_related("event").first()
+        )
+
+    @classmethod
+    def when(cls, shift):
+        return "{start} – {end}".format(
+            start=date_format(timezone.localtime(shift.start_time), "DATETIME_FORMAT"),
+            end=date_format(timezone.localtime(shift.end_time), "TIME_FORMAT"),
+        )
+
+    @classmethod
+    def get_subject(cls, notification):
+        shift = cls.shift(notification)
+        if shift is None:
+            return str(cls.title)
+        return _("Reminder: {title}, {when}").format(title=shift.event.title, when=cls.when(shift))
+
+    @classmethod
+    def partners(cls, shift, notification):
+        """Only the people this person may see, named the way the plugin names them."""
+        observers = {
+            record.participation_id: record.user
+            for record in ObserverParticipation.objects.filter(
+                planned_shift__shift=shift
+            ).select_related("user")
+        }
+        names = []
+        for participation in AbstractParticipation.objects.filter(
+            shift=shift, state=CONFIRMED
+        ).viewable_by(notification.user.as_participant()):
+            person = observers.get(participation.pk)
+            identifier = person.pk if person else getattr(participation, "user_id", None)
+            if identifier == notification.user_id:
+                continue
+            names.append(str(person) if person else str(participation.participant))
+        return sorted(names)
+
+    @classmethod
+    def sits_in(cls, shift, notification):
+        return ObserverParticipation.objects.filter(
+            planned_shift__shift=shift, user_id=notification.user_id
+        ).exists()
+
+    @classmethod
+    def get_body(cls, notification):
+        shift = cls.shift(notification)
+        if shift is None or not notification.user.has_perm("core.view_event", shift.event):
+            return ""
+        lines = [
+            _("Hello {name},").format(name=notification.user.get_full_name()),
+            "",
+            _("a reminder: you are staffed for {title} on {when}.").format(
+                title=shift.event.title, when=cls.when(shift)
+            ),
+        ]
+        if shift.event.location:
+            lines.append(_("Where: {location}").format(location=shift.event.location))
+        if cls.sits_in(shift, notification):
+            lines.append(
+                _(
+                    "You are sitting in: no qualification is required and the time is not "
+                    "counted as working hours."
+                )
+            )
+        if partners := cls.partners(shift, notification):
+            lines += ["", _("With you: {people}.").format(people=", ".join(partners))]
+        lines += [
+            "",
+            _("If you cannot make it, please sign off in ephios as early as you can."),
+            f"[{shift.event.title}]({make_absolute(shift.event.get_absolute_url())})",
+        ]
+        return text(lines)
+
+    @classmethod
+    def get_actions(cls, notification):
+        return []
+
+    @classmethod
+    def is_obsolete(cls, notification):
+        from .access import enabled
+
+        shift = cls.shift(notification)
+        return not enabled() or shift is None or shift.start_time <= timezone.now()
+
+
+class AssemblyReminder(AssemblyInvitation):
+    """The same message as the invitation, sent again shortly before the assembly."""
+
+    slug = "shift_coordination_assembly_reminder"
+    title = _("Reminder about an assembly you are invited to")
+
+    @classmethod
+    def get_subject(cls, notification):
+        assembly = cls.assembly(notification)
+        if assembly is None:
+            return str(cls.title)
+        return _("Reminder: {title}, {when}").format(
+            title=assembly.event.title, when=cls.when(assembly)
+        )

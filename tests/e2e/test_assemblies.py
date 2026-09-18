@@ -26,9 +26,9 @@ import uuid
 from ephios.core.models import EventType
 from ephios_shift_coordination.models import ServiceTemplate
 source = ServiceTemplate.objects.get(title='Dienst')
-event_type = EventType.objects.create(title='Mitgliederversammlung')
+event_type = EventType.objects.create(title='Akzeptanzversammlung')
 event_type.preferences['shift_coordination__is_assembly'] = True
-event_type.preferences['shift_coordination__assembly_title'] = 'Mitgliederversammlung'
+event_type.preferences['shift_coordination__assembly_title'] = 'Akzeptanzversammlung'
 event_type.preferences['shift_coordination__assembly_location'] = 'Wache'
 event_type.preferences['visible_for'] = list(source.visible_for.all())
 event_type.preferences['responsible_groups'] = list(source.responsible_groups.all())
@@ -46,6 +46,7 @@ print(event_type.pk)
             # The recipients are named before anything is sent.
             expect(coordinator.get_by_role("heading", name="Wer eingeladen wird")).to_be_visible()
             expect(coordinator.get_by_text("Demoperson 003", exact=False).first).to_be_visible()
+            coordinator.locator('[name="event_type"]').select_option(label="Akzeptanzversammlung")
             coordinator.locator('[name="date"]').fill("2031-06-12")
             coordinator.locator('[name="start"]').fill("19:00")
             coordinator.locator('[name="end"]').fill("21:00")
@@ -94,11 +95,47 @@ print(event_type.pk)
 from ephios.core.models import LocalParticipation, UserProfile
 person = UserProfile.objects.get(email='demo-003@example.invalid')
 print(LocalParticipation.objects.filter(
-    user=person, shift__event__type__title='Mitgliederversammlung'
+    user=person, shift__event__type__title='Akzeptanzversammlung'
 ).values_list('state', flat=True).first())
 """)
                 == "1"
             )
+            # A reminder rule reaches everybody invited, whatever they answered.
+            marker = {message["ID"] for message in mail_messages()}
+            in_test_app("""
+from datetime import timedelta
+from django.core.management import call_command
+from django.utils import timezone
+from ephios.core.models import Shift
+from ephios_shift_coordination.models import PlanningSettings
+shift = Shift.objects.get(event__type__title='Akzeptanzversammlung')
+soon = timezone.now() + timedelta(hours=3)
+Shift.objects.filter(pk=shift.pk).update(
+    meeting_time=soon, start_time=soon, end_time=soon + timedelta(hours=2)
+)
+settings = PlanningSettings.objects.get()
+# Midnight of the day the assembly starts on has always passed by the time this runs.
+settings.assembly_reminder_days = [
+    (timezone.localtime(soon).date() - timezone.localdate()).days
+]
+settings.assembly_reminder_time = '00:00'
+settings.save()
+call_command('run_periodic')
+print('reminded')
+""")
+            reminder = [
+                message
+                for message in mail_messages()
+                if message["ID"] not in marker
+                and message["Subject"].startswith("Erinnerung:")
+                and any(
+                    recipient["Address"] == "demo-003@example.invalid"
+                    for recipient in message["To"]
+                )
+                and "Akzeptanzversammlung" in mail_body(message["ID"])
+            ]
+            assert len(reminder) == 1
+            assert "Bisher hast du zugesagt" in mail_body(reminder[0]["ID"])
         except Exception:
             capture_failure(coordinator, "e2e-assembly-coordinator")
             capture_failure(invitee, "e2e-assembly-invitee")

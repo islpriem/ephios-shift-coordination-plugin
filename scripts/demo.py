@@ -22,6 +22,8 @@ from ephios.core.models import (
 )
 from guardian.shortcuts import assign_perm
 
+from ephios_shift_coordination.assemblies import answer as answer_assembly
+from ephios_shift_coordination.assemblies import plan_assembly
 from ephios_shift_coordination.drafts import load_plan, save_draft
 from ephios_shift_coordination.models import (
     PlanningPeriod,
@@ -254,6 +256,40 @@ def midday(day):
 
 
 @transaction.atomic
+def assembly_type(members, coordinators):
+    """An event type that stands for assemblies, with the defaults a coordinator starts from."""
+    event_type, _ = EventType.objects.get_or_create(
+        title="Mitgliederversammlung",
+        defaults={"default_description": "Versammlung aller Mitglieder."},
+    )
+    event_type.preferences["shift_coordination__is_assembly"] = True
+    event_type.preferences["shift_coordination__assembly_title"] = "Mitgliederversammlung"
+    event_type.preferences["shift_coordination__assembly_location"] = "Demo room"
+    event_type.preferences["visible_for"] = [members]
+    event_type.preferences["responsible_groups"] = [coordinators]
+    return event_type
+
+
+def call_assembly(coordinator, event_type, cohort, day, rng):
+    """One called and invited assembly, so the whole flow can be tried straight away."""
+    start = midday(day) + timedelta(hours=7)
+    assembly = plan_assembly(
+        coordinator,
+        event_type=event_type,
+        title="Mitgliederversammlung",
+        description="Versammlung aller Mitglieder.",
+        location="Demo room",
+        start=start,
+        end=start + timedelta(hours=2),
+        agenda="Bericht des Vorstands\nPlanung des nächsten Quartals\nVerschiedenes",
+        silent=False,
+    )
+    for person in cohort:
+        if (choice := rng.random()) < 0.5:
+            answer_assembly(assembly, person, attending=choice < 0.35)
+    return assembly
+
+
 def seed_demo():
     guarded()
     cohort, members, coordinators, skills = people()
@@ -261,7 +297,11 @@ def seed_demo():
     settings_row, _ = PlanningSettings.objects.get_or_create(pk=1)
     if not settings_row.allow_observers:
         settings_row.allow_observers = True
+        settings_row.service_reminder_days = [1]
+        settings_row.assembly_reminder_days = [3, 1]
         settings_row.save()
+    template.event_type.preferences["shift_coordination__is_service"] = True
+    meetings = assembly_type(members, coordinators)
     preferences = global_preferences_registry.manager()
     preferences["general__enabled_plugins"] = sorted(
         set([*preferences["general__enabled_plugins"], "ephios_shift_coordination"])
@@ -327,5 +367,7 @@ def seed_demo():
         rng=rng,
         share=0.5,
     )
-    return template
+
+    # 5. One assembly that has been called and invited, with about half the answers in.
+    call_assembly(coordinator, meetings, cohort, today + timedelta(days=21), rng)
     return template

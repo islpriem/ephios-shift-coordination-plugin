@@ -61,6 +61,9 @@ def test_shift_template_allows_overnight_duties_and_unlimited_maximum():
         {"reminder_days": [0]},
         {"reminder_days": [3, 3]},
         {"reminder_days": "three"},
+        {"service_reminder_days": [-1]},
+        {"assembly_reminder_days": [1, 1]},
+        {"service_reminder_days": "daily"},
     ],
 )
 def test_invalid_planning_rules_are_rejected(changes):

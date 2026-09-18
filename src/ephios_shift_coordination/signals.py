@@ -116,8 +116,9 @@ def event_info(sender, request, event, **kwargs):
 
 def assembly_info(request, event):
     """The agenda and the invitation state, shown on the native event page."""
-    from .assemblies import answer_state, invited
+    from .assemblies import answer_state, invited, shift_of
     from .models import Assembly
+    from .reminders import overview
 
     assembly = Assembly.objects.filter(event=event).first()
     if not assembly:
@@ -131,6 +132,9 @@ def assembly_info(request, event):
             "answer": answer_state(assembly, request.user),
             "responsible": responsible,
             "recipients": invited(event) if responsible else [],
+            "reminders": overview(shift_of(assembly))
+            if responsible and shift_of(assembly)
+            else None,
         },
         request=request,
     )
@@ -140,7 +144,9 @@ def assembly_info(request, event):
 def notification_types(sender, **kwargs):
     from .notifications import (
         AssemblyInvitation,
+        AssemblyReminder,
         PlanPublished,
+        ServiceReminder,
         ShiftUnderstaffed,
         StaffingChanged,
         SurveyInvitation,
@@ -154,6 +160,8 @@ def notification_types(sender, **kwargs):
         ShiftUnderstaffed,
         StaffingChanged,
         AssemblyInvitation,
+        AssemblyReminder,
+        ServiceReminder,
     ]
 
 
@@ -162,7 +170,9 @@ def survey_periodic(sender, **kwargs):
     from django.db import transaction
     from ephios.core.services.notifications.backends import send_all_notifications
 
+    from .reminders import process_reminders
     from .surveys import process_surveys
 
     process_surveys()
+    process_reminders()
     transaction.on_commit(send_all_notifications)

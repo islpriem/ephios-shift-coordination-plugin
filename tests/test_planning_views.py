@@ -16,6 +16,16 @@ def url(name, *args):
     return reverse(NAMESPACE + name, args=args)
 
 
+def settings_payload(configuration, **changes):
+    """The whole settings form: planning rules plus the instance-wide reminder rules."""
+    return {
+        **configuration.snapshot(),
+        "service_reminder_time": "09:00",
+        "assembly_reminder_time": "09:00",
+        **changes,
+    }
+
+
 @pytest.mark.parametrize(
     "role, page, status",
     [
@@ -54,13 +64,13 @@ def test_csrf_protects_settings(planning_data):
 def test_administrator_selects_existing_groups_and_defaults(planning_data, client):
     client.force_login(planning_data.admin)
     group = Group.objects.create(name="New planning group")
-    payload = {
-        **planning_data.configuration.snapshot(),
-        "planning_groups": [group.pk],
-        "weekdays": [1, 3],
-        "reminder_days": "3, 1",
-        "weekly_limit": 4,
-    }
+    payload = settings_payload(
+        planning_data.configuration,
+        planning_groups=[group.pk],
+        weekdays=[1, 3],
+        reminder_days="3, 1",
+        weekly_limit=4,
+    )
     response = client.post(url("settings"), payload)
     assert response.status_code == 302
     assert group.permissions.filter(codename="manage_planning").exists()
@@ -230,7 +240,7 @@ def test_replayed_creation_with_changed_selection_returns_409(planning_data, cli
 def test_empty_reminders_can_be_saved(planning_data, client):
     client.force_login(planning_data.admin)
     response = client.post(
-        url("settings"), {**planning_data.configuration.snapshot(), "reminder_days": ""}
+        url("settings"), settings_payload(planning_data.configuration, reminder_days="")
     )
     assert response.status_code == 302
     assert PlanningSettings.objects.get().reminder_days == []

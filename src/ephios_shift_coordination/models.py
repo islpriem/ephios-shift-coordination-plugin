@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
@@ -18,6 +18,20 @@ def default_weekdays():
 
 def default_reminders():
     return [3]
+
+
+# Settings that steer the plugin itself: they are never copied into a planning period.
+INSTANCE_SETTINGS = (
+    "service_reminder_days",
+    "service_reminder_time",
+    "assembly_reminder_days",
+    "assembly_reminder_time",
+)
+
+
+def nine_o_clock():
+    """A reminder in the morning of the chosen day, unless the instance says otherwise."""
+    return time(9, 0)
 
 
 class PlanningSettings(models.Model):
@@ -43,6 +57,14 @@ class PlanningSettings(models.Model):
         default=1,
         validators=[MinValueValidator(1)],
     )
+    service_reminder_days = models.JSONField(
+        _("Service reminders in days before"), default=list, blank=True
+    )
+    service_reminder_time = models.TimeField(_("Service reminder time"), default=nine_o_clock)
+    assembly_reminder_days = models.JSONField(
+        _("Assembly reminders in days before"), default=list, blank=True
+    )
+    assembly_reminder_time = models.TimeField(_("Assembly reminder time"), default=nine_o_clock)
 
     class Meta:
         constraints = [
@@ -64,12 +86,22 @@ class PlanningSettings(models.Model):
             or len(set(self.reminder_days)) != len(self.reminder_days)
         ):
             raise ValidationError({"reminder_days": _("Enter distinct positive reminder offsets.")})
+        for name in ("service_reminder_days", "assembly_reminder_days"):
+            offsets = getattr(self, name)
+            # Zero means the day of the appointment itself, which is a sensible reminder.
+            if (
+                not isinstance(offsets, list)
+                or any(type(day) is not int or day < 0 for day in offsets)
+                or len(set(offsets)) != len(offsets)
+            ):
+                raise ValidationError({name: _("Enter distinct reminder offsets of zero or more.")})
 
     def snapshot(self):
+        """The planning rules a period keeps; instance settings are not part of them."""
         return {
             field.name: getattr(self, field.name)
             for field in self._meta.fields
-            if field.name != "id"
+            if field.name != "id" and field.name not in INSTANCE_SETTINGS
         }
 
 
@@ -332,6 +364,23 @@ class RuleOverride(models.Model):
 
     class Meta:
         ordering = ["-created_at", "-pk"]
+
+
+class ReminderDispatch(models.Model):
+    """One row per reminder that went out or was deliberately skipped, keyed by its moment."""
+
+    shift = models.ForeignKey("core.Shift", models.CASCADE, related_name="+")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, models.CASCADE, related_name="+")
+    key = models.CharField(max_length=64)
+    notification = models.OneToOneField("core.Notification", models.SET_NULL, null=True)
+    skipped = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["shift", "user", "key"], name="planning_unique_reminder"
+            )
+        ]
 
 
 class Assembly(models.Model):

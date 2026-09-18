@@ -15,7 +15,7 @@ from django.utils.translation import gettext_lazy as _
 from ephios.core.models import EventType
 
 from .dates import local_datetime, next_month
-from .models import PlanningSettings, ServiceTemplate, ShiftTemplate
+from .models import INSTANCE_SETTINGS, PlanningSettings, ServiceTemplate, ShiftTemplate
 
 WEEKDAYS = list(
     enumerate(
@@ -30,9 +30,27 @@ WEEKDAYS = list(
         ]
     )
 )
-RULE_FIELDS = [field.name for field in PlanningSettings._meta.fields if field.name != "id"]
+INSTANCE_FIELDS = INSTANCE_SETTINGS
+RULE_FIELDS = [
+    field.name
+    for field in PlanningSettings._meta.fields
+    if field.name != "id" and field.name not in INSTANCE_FIELDS
+]
 # Values that only make sense for the whole instance, not per planning period.
 GLOBAL_FIELDS = ("country", "region", "solver_seconds", "minimum_regular")
+
+REMINDER_HELP = {
+    "service_reminder_days": _(
+        "Everybody staffed for a service, including anybody sitting in, is reminded this many "
+        "days before it starts. Separate several values with commas, 0 means the same day. "
+        "Empty means no reminder."
+    ),
+    "assembly_reminder_days": _(
+        "Everybody invited to an assembly is reminded this many days before it starts, "
+        "whatever they answered. Separate several values with commas, 0 means the same day. "
+        "Empty means no reminder."
+    ),
+}
 
 SETTINGS_HELP = {
     "weekdays": _("Preselected weekdays for new planning periods."),
@@ -78,6 +96,14 @@ PERIOD_HELP = {
 }
 
 
+def offsets(value):
+    """Read a comma separated list of day offsets, as every reminder field uses one."""
+    try:
+        return [int(part.strip()) for part in value.split(",") if part.strip()]
+    except ValueError as exc:
+        raise forms.ValidationError(_("Enter whole numbers separated by commas.")) from exc
+
+
 class RuleForm(forms.ModelForm):
     help_texts = SETTINGS_HELP
     weekdays = forms.TypedMultipleChoiceField(
@@ -110,17 +136,7 @@ class RuleForm(forms.ModelForm):
                 self.fields[name].help_text = help_text
 
     def clean_reminder_days(self):
-        try:
-            return [
-                int(value.strip())
-                for value in self.cleaned_data["reminder_days"].split(",")
-                if value.strip()
-            ]
-        except ValueError as exc:
-            raise forms.ValidationError(_("Enter whole numbers separated by commas.")) from exc
-
-    def rules(self):
-        return {name: self.cleaned_data[name] for name in RULE_FIELDS}
+        return offsets(self.cleaned_data["reminder_days"])
 
 
 class SettingsForm(RuleForm):
@@ -134,6 +150,19 @@ class SettingsForm(RuleForm):
             "template's groups."
         ),
     )
+    service_reminder_days = forms.CharField(
+        label=_("Remind about services this many days before"), required=False
+    )
+    assembly_reminder_days = forms.CharField(
+        label=_("Remind about assemblies this many days before"), required=False
+    )
+
+    class Meta(RuleForm.Meta):
+        fields = [*RULE_FIELDS, *INSTANCE_FIELDS]
+        widgets = {
+            name: forms.TimeInput(format="%H:%M", attrs={"type": "time"})
+            for name in ("service_reminder_time", "assembly_reminder_time")
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -141,6 +170,15 @@ class SettingsForm(RuleForm):
             permissions__codename="manage_planning",
             permissions__content_type__app_label="ephios_shift_coordination",
         )
+        for name in ("service_reminder_days", "assembly_reminder_days"):
+            self.initial[name] = ", ".join(map(str, self.initial.get(name) or []))
+            self.fields[name].help_text = REMINDER_HELP[name]
+
+    def clean_service_reminder_days(self):
+        return offsets(self.cleaned_data["service_reminder_days"])
+
+    def clean_assembly_reminder_days(self):
+        return offsets(self.cleaned_data["assembly_reminder_days"])
 
     @transaction.atomic
     def save(self):

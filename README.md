@@ -89,6 +89,9 @@ The dataset contains:
 - A `Dienst` event type and service template with `Schicht 1` (09:00–13:00) and
   `Schicht 2` (13:00–17:00), meeting 15 minutes earlier, minimum two and maximum
   three people each. Each shift requires its corresponding demo qualification.
+- One called assembly in about three weeks, invited, with an agenda and about half the
+  answers in, plus reminder rules of one day before services and three and one day before
+  assemblies.
 - Four fortnightly planning periods with seven services each, one per state you
   may want to try: a finished published one in the past, a published one that is
   about to start, one whose survey is closed and that is waiting to be planned
@@ -252,6 +255,20 @@ answer for anybody. Answers go through the native signup logic and appear in eph
 other participation. **Still einberufen** notifies nobody, and the assembly page offers the
 invitation later, together with the date it was last sent. Sending it again is deliberate,
 for example after the agenda changed.
+
+## Reminders
+
+Planning settings carry two reminder rules: one for services and one for assemblies. Each is a
+list of day offsets and one time of day, so "1, 0" with 09:00 reminds at nine on the day before
+and again on the day itself. An empty list means no reminder, which is the default.
+
+Service reminders reach everybody confirmed for the shift, including the people sitting in, and
+name the others as far as ephios shows them to that person. Assembly reminders reach everybody
+invited whatever they answered, and repeat the agenda, the current own answer and the same
+signed link. Reminders ride the normal `run_periodic` command: each one goes out once per person
+and appointment, repeated runs create nothing, and a reminder whose moment passed during an
+outage is recorded rather than sent late. The assembly page shows the responsibles which
+reminders went out and when the next one is due.
 
 Members use their existing personal ICS URL in ephios calendar settings. The plugin
 creates no ICS files or separate feed: confirmed participations automatically appear

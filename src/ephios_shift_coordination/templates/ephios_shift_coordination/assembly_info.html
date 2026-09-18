@@ -25,6 +25,22 @@
         </ol>
     {% endif %}
     {% if responsible %}
+        <p class="small text-body-secondary mb-0 mt-2">
+            <i class="far fa-bell" aria-hidden="true"></i>
+            {% if reminders.sent %}
+                {% translate "Reminders sent:" %}
+                {% for moment in reminders.sent %}
+                    {{ moment|date:"SHORT_DATETIME_FORMAT" }}{% if not forloop.last %}, {% endif %}
+                {% endfor %}
+            {% else %}
+                {% translate "No reminder has been sent yet." %}
+            {% endif %}
+            {% if reminders.next %}
+                {% blocktranslate with moment=reminders.next|date:"SHORT_DATETIME_FORMAT" %}Next reminder: {{ moment }}.{% endblocktranslate %}
+            {% else %}
+                {% translate "No further reminder is planned." %}
+            {% endif %}
+        </p>
         <details class="sc-details mt-2">
             <summary>
                 {% blocktranslate count counter=recipients|length %}Invite 1 person{% plural %}Invite {{ counter }} people{% endblocktranslate %}

@@ -1,8 +1,14 @@
 import pytest
 from django.core.management.base import CommandError
 from ephios.core.models import Event, LocalParticipation, QualificationGrant, UserProfile
+from ephios.core.models.users import Notification
 
-from ephios_shift_coordination.models import PlanningPeriod, ServiceTemplate
+from ephios_shift_coordination.models import (
+    Assembly,
+    PlanningPeriod,
+    PlanningSettings,
+    ServiceTemplate,
+)
 from scripts.demo import MEMBERS, seed_demo
 
 
@@ -71,3 +77,14 @@ def test_demo_import_covers_every_state_a_coordinator_wants_to_try(demo):
     assert 0 < answered < running.responses.count()
     assert running.responses.exclude(notes="").exists()
     assert Event.all_objects.filter(planning_link__period__in=periods).exists()
+
+
+@pytest.mark.django_db
+def test_the_demo_calls_one_invited_assembly_and_sets_reminder_rules(demo):
+    assembly = Assembly.objects.get()
+    assert assembly.invited_at is not None
+    assert "Bericht des Vorstands" in assembly.agenda
+    assert Notification.objects.filter(slug="shift_coordination_assembly_invitation").count() == 30
+    assert LocalParticipation.objects.filter(shift__event=assembly.event).exists()
+    rules = PlanningSettings.objects.get()
+    assert rules.service_reminder_days == [1] and rules.assembly_reminder_days == [3, 1]
