@@ -1,0 +1,54 @@
+{% load i18n %}
+<div class="sc-event-info mb-3">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+        <span class="fw-semibold"><i class="fas fa-users"
+   aria-hidden="true"></i> {% translate "Assembly" %}</span>
+        {% if answer.yes %}
+            <span class="badge text-bg-success"><i class="fas fa-check"
+   aria-hidden="true"></i> {% translate "You said yes" %}</span>
+        {% elif answer.no %}
+            <span class="badge text-bg-secondary"><i class="fas fa-times"
+   aria-hidden="true"></i> {% translate "You said no" %}</span>
+        {% endif %}
+        {% if assembly.invited_at %}
+            <span class="text-body-secondary small">
+                {% blocktranslate with sent=assembly.invited_at|date:"SHORT_DATETIME_FORMAT" %}Invitation sent on {{ sent }}{% endblocktranslate %}
+            </span>
+        {% else %}
+            <span class="badge text-bg-warning"><i class="far fa-clock" aria-hidden="true"></i> {% translate "Nobody has been invited yet" %}</span>
+        {% endif %}
+    </div>
+    {% if agenda %}
+        <p class="mb-1 mt-2 fw-semibold">{% translate "Agenda" %}</p>
+        <ol class="mb-0">
+            {% for item in agenda %}<li>{{ item }}</li>{% endfor %}
+        </ol>
+    {% endif %}
+    {% if responsible %}
+        <details class="sc-details mt-2">
+            <summary>
+                {% blocktranslate count counter=recipients|length %}Invite 1 person{% plural %}Invite {{ counter }} people{% endblocktranslate %}
+            </summary>
+            <div class="sc-details-body">
+                <p class="text-body-secondary small">
+                    {% translate "Everybody who may see this assembly gets a mail with the agenda and a link to answer. You can send it again later, for example after the agenda changed." %}
+                </p>
+                <p class="small">
+                    {% for person in recipients %}{{ person }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                </p>
+                <form method="post"
+                      action="{% url 'ephios_shift_coordination:assembly_invite' assembly.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-primary">
+                        <i class="fas fa-paper-plane" aria-hidden="true"></i>
+                        {% if assembly.invited_at %}
+                            {% translate "Send the invitation again" %}
+                        {% else %}
+                            {% translate "Send the invitation now" %}
+                        {% endif %}
+                    </button>
+                </form>
+            </div>
+        </details>
+    {% endif %}
+</div>

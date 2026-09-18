@@ -5,14 +5,16 @@ from zoneinfo import ZoneInfo
 
 import holidays
 from django import forms
+from django.conf import settings
 from django.contrib.auth.models import Group, Permission
 from django.db import transaction
 from django.forms import BaseInlineFormSet, inlineformset_factory
 from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _
+from ephios.core.models import EventType
 
-from .dates import next_month
+from .dates import local_datetime, next_month
 from .models import PlanningSettings, ServiceTemplate, ShiftTemplate
 
 WEEKDAYS = list(
@@ -515,3 +517,72 @@ class StaffingForm(forms.Form):
         choices=[("join", _("Sign up")), ("observe", _("Sit in")), ("leave", _("Sign off"))],
         widget=forms.HiddenInput,
     )
+
+
+class AssemblyForm(forms.Form):
+    """Everything needed to call an assembly; the kind of assembly supplies the rest."""
+
+    event_type = forms.ModelChoiceField(
+        label=_("Kind of assembly"),
+        queryset=EventType.objects.none(),
+        empty_label=None,
+        help_text=_("Who is invited and who is responsible comes from this kind."),
+    )
+    title = forms.CharField(label=_("Title"), max_length=254)
+    location = forms.CharField(label=_("Location"), max_length=254)
+    description = forms.CharField(
+        label=_("Description"), widget=forms.Textarea(attrs={"rows": 3}), required=False
+    )
+    date = forms.DateField(
+        label=_("Date"), widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")
+    )
+    start = forms.TimeField(
+        label=_("Start"), widget=forms.TimeInput(format="%H:%M", attrs={"type": "time"})
+    )
+    end = forms.TimeField(
+        label=_("End"), widget=forms.TimeInput(format="%H:%M", attrs={"type": "time"})
+    )
+    agenda = forms.CharField(
+        label=_("Agenda"),
+        widget=forms.Textarea(attrs={"rows": 6}),
+        required=False,
+        max_length=8000,
+        help_text=_("One item per line. It is shown at the assembly and sent with the invitation."),
+    )
+    silent = forms.BooleanField(
+        label=_("Call quietly, send the invitation later"),
+        required=False,
+        help_text=_("Nobody is notified now. You can send the invitation from the assembly page."),
+    )
+
+    def __init__(self, *args, types, defaults, **kwargs):
+        """Start from the first kind of assembly; picking another one is one click away."""
+        super().__init__(*args, initial={"event_type": types[0], **defaults}, **kwargs)
+        self.fields["event_type"].queryset = EventType.objects.filter(
+            pk__in=[event_type.pk for event_type in types]
+        )
+
+    def clean(self):
+        data = super().clean()
+        if not (data.get("date") and data.get("start") and data.get("end")):
+            return data
+        data["start_at"] = local_datetime(data["date"], data["start"], settings.TIME_ZONE)
+        data["end_at"] = local_datetime(data["date"], data["end"], settings.TIME_ZONE)
+        if data["end_at"] <= data["start_at"]:
+            raise forms.ValidationError(_("The assembly has to end after it starts."))
+        if data["start_at"] <= timezone.now():
+            raise forms.ValidationError(_("An assembly has to start in the future."))
+        return data
+
+    def assembly_arguments(self):
+        data = self.cleaned_data
+        return {
+            "event_type": data["event_type"],
+            "title": data["title"],
+            "description": data["description"],
+            "location": data["location"],
+            "start": data["start_at"],
+            "end": data["end_at"],
+            "agenda": data["agenda"],
+            "silent": data["silent"],
+        }

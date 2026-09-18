@@ -38,6 +38,13 @@ def navigation(sender, request, **kwargs):
             "active": request.path == reverse("ephios_shift_coordination:survey_list"),
         }
     )
+    links.append(
+        {
+            "label": _("Assemblies"),
+            "url": reverse("ephios_shift_coordination:assembly_list"),
+            "active": request.path.startswith(reverse("ephios_shift_coordination:assembly_list")),
+        }
+    )
     return links
 
 
@@ -82,9 +89,11 @@ def event_info(sender, request, event, **kwargs):
     from .models import PlanningPeriod
     from .staffing import options, service_shifts
 
-    link = PlannedEvent.objects.select_related("period").filter(event=event).first()
-    if not link or not request.user.has_perm("core.view_event", event):
+    if not request.user.has_perm("core.view_event", event):
         return ""
+    link = PlannedEvent.objects.select_related("period").filter(event=event).first()
+    if not link:
+        return assembly_info(request, event)
     shifts = []
     if link.period.state == PlanningPeriod.State.PUBLISHED:
         shifts = [options(request.user, planned) for planned in service_shifts(link)]
@@ -105,9 +114,32 @@ def event_info(sender, request, event, **kwargs):
     )
 
 
+def assembly_info(request, event):
+    """The agenda and the invitation state, shown on the native event page."""
+    from .assemblies import answer_state, invited
+    from .models import Assembly
+
+    assembly = Assembly.objects.filter(event=event).first()
+    if not assembly:
+        return ""
+    responsible = request.user.has_perm("core.change_event", event)
+    return render_to_string(
+        "ephios_shift_coordination/assembly_info.html",
+        {
+            "assembly": assembly,
+            "agenda": [line.strip() for line in assembly.agenda.splitlines() if line.strip()],
+            "answer": answer_state(assembly, request.user),
+            "responsible": responsible,
+            "recipients": invited(event) if responsible else [],
+        },
+        request=request,
+    )
+
+
 @receiver(register_notification_types, dispatch_uid="shift_coordination.notifications")
 def notification_types(sender, **kwargs):
     from .notifications import (
+        AssemblyInvitation,
         PlanPublished,
         ShiftUnderstaffed,
         StaffingChanged,
@@ -115,7 +147,14 @@ def notification_types(sender, **kwargs):
         SurveyReminder,
     )
 
-    return [SurveyInvitation, SurveyReminder, PlanPublished, ShiftUnderstaffed, StaffingChanged]
+    return [
+        SurveyInvitation,
+        SurveyReminder,
+        PlanPublished,
+        ShiftUnderstaffed,
+        StaffingChanged,
+        AssemblyInvitation,
+    ]
 
 
 @receiver(periodic_signal, dispatch_uid="shift_coordination.survey_periodic")

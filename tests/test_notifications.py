@@ -2,9 +2,14 @@
 
 from datetime import timedelta
 
+from django.utils import timezone
+from ephios.core.models import Event, Shift
 from ephios.core.models.users import Notification
 
+from ephios_shift_coordination.assemblies import answer
+from ephios_shift_coordination.models import Assembly
 from ephios_shift_coordination.notifications import (
+    AssemblyInvitation,
     PlanPublished,
     ShiftUnderstaffed,
     StaffingChanged,
@@ -14,6 +19,7 @@ from ephios_shift_coordination.notifications import (
 from ephios_shift_coordination.publication import publish_plan
 from ephios_shift_coordination.staffing import add_person, remove_person
 from ephios_shift_coordination.surveys import process_surveys
+from tests.test_assemblies import call
 from tests.test_observers import observer_data as observer_data
 from tests.test_publication import prepare
 from tests.test_staffing import member_with_access
@@ -132,3 +138,54 @@ def test_staffing_changes_tell_the_person_what_happened(published_data):
     assert str(sitting.body) == "" and sitting.is_obsolete
     data.period.delete()
     assert str(sitting.subject) == str(StaffingChanged.title)
+
+
+def test_the_invitation_carries_the_agenda_the_own_status_and_one_link(
+    planning_data, assembly_type
+):
+    assembly = call(planning_data, assembly_type, silent=False)
+    notice = Notification.objects.get(user=planning_data.member, slug=AssemblyInvitation.slug)
+    assert "not answered yet" in str(notice.body)
+    label, link = notice.get_actions()[0]
+    assert "Answer" in label and "/assemblies/answer/" in link
+    answer(assembly, planning_data.member, attending=True)
+    assert "said yes so far" in str(notice.body)
+    answer(assembly, planning_data.member, attending=False)
+    assert "said no so far" in str(notice.body)
+    assert not notice.is_obsolete
+
+
+def test_an_invitation_survives_the_assembly_being_deleted(planning_data, assembly_type):
+    call(planning_data, assembly_type, silent=False)
+    notice = Notification.objects.filter(
+        user=planning_data.member, slug=AssemblyInvitation.slug
+    ).first()
+    Assembly.objects.all().delete()
+    assert str(notice.subject) == str(AssemblyInvitation.title)
+    assert str(notice.body) == "" and not notice.get_actions() and notice.is_obsolete
+
+
+def test_an_invitation_is_obsolete_once_the_assembly_happened(planning_data, assembly_type):
+    assembly = call(planning_data, assembly_type, silent=False)
+    notice = Notification.objects.filter(
+        user=planning_data.member, slug=AssemblyInvitation.slug
+    ).first()
+    assert not notice.is_obsolete
+    Shift.objects.filter(event=assembly.event).update(
+        start_time=timezone.now() - timedelta(hours=3), end_time=timezone.now() - timedelta(hours=1)
+    )
+    assert notice.is_obsolete
+
+
+def test_the_invitation_leaves_out_what_the_assembly_does_not_have(planning_data, assembly_type):
+    assembly = call(planning_data, assembly_type, description="", agenda="", silent=False)
+    Event.objects.filter(pk=assembly.event_id).update(location="")
+    notice = Notification.objects.filter(
+        user=planning_data.member, slug=AssemblyInvitation.slug
+    ).first()
+    body = str(notice.body)
+    assert "Where:" not in body and "Agenda:" not in body
+    assert "you are invited to Monthly meeting" in body
+    # Without a shift there is no time to name, and the invitation stays readable.
+    Shift.objects.filter(event=assembly.event).delete()
+    assert "Monthly meeting" in str(notice.subject) and "Monthly meeting" in str(notice.body)

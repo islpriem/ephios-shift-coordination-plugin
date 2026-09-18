@@ -75,6 +75,20 @@ def planning_data(db, monkeypatch):
     preferences["general__enabled_plugins"] = original
 
 
+@pytest.fixture
+def assembly_type(planning_data):
+    """An event type marked as an assembly, with the defaults a coordinator starts from."""
+    event_type = EventType.objects.create(
+        title="Team meeting", default_description="As every month"
+    )
+    event_type.preferences["shift_coordination__is_assembly"] = True
+    event_type.preferences["shift_coordination__assembly_title"] = "Monthly meeting"
+    event_type.preferences["shift_coordination__assembly_location"] = "Back room"
+    event_type.preferences["visible_for"] = [planning_data.group]
+    event_type.preferences["responsible_groups"] = [planning_data.coordination]
+    return event_type
+
+
 _rendered_templates = set()
 
 

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% load crispy_forms_filters i18n static %}
+{% block title %}
+    {% translate "Call an assembly" %}
+{% endblock %}
+{% block content %}
+    <link rel="stylesheet"
+          href="{% static 'ephios_shift_coordination/planning.css' %}">
+    <nav class="small mb-2">
+        <a href="{% url 'ephios_shift_coordination:assembly_list' %}">{% translate "Assemblies" %}</a>
+    </nav>
+    <h1>{% translate "Call an assembly" %}</h1>
+    <p class="text-body-secondary">
+        {% translate "The kind of assembly decides who is invited and who is responsible. Everything else you can change here." %}
+    </p>
+    <div class="row g-3">
+        <div class="col-lg-8">
+            <section class="sc-card">
+                <div class="sc-card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        {{ form.non_field_errors }}
+                        {{ form.event_type|as_crispy_field }}
+                        {{ form.title|as_crispy_field }}
+                        {{ form.location|as_crispy_field }}
+                        {{ form.description|as_crispy_field }}
+                        <div class="row">
+                            <div class="col-md-4">{{ form.date|as_crispy_field }}</div>
+                            <div class="col-md-4">{{ form.start|as_crispy_field }}</div>
+                            <div class="col-md-4">{{ form.end|as_crispy_field }}</div>
+                        </div>
+                        {{ form.agenda|as_crispy_field }}
+                        {{ form.silent|as_crispy_field }}
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-paper-plane"
+                                   aria-hidden="true"></i> {% translate "Call the assembly" %}
+                            </button>
+                            <a class="btn btn-outline-primary"
+                               href="{% url 'ephios_shift_coordination:assembly_list' %}">{% translate "Cancel" %}</a>
+                        </div>
+                    </form>
+                </div>
+            </section>
+        </div>
+        <div class="col-lg-4">
+            <section class="sc-card">
+                <h2 class="sc-card-title">
+                    <i class="fas fa-users"
+                       aria-hidden="true"></i> {% translate "Who gets invited" %}
+                </h2>
+                <div class="sc-card-body">
+                    <p class="text-body-secondary small">
+                        {% translate "Everybody listed here receives the invitation with the agenda and a link to answer, unless you call the assembly quietly." %}
+                    </p>
+                    {% for entry in recipients %}
+                        <details class="sc-details" {% if forloop.first %}open{% endif %}>
+                            <summary>
+                                {{ entry.type }}
+                                <span class="text-body-secondary">({{ entry.people|length }})</span>
+                            </summary>
+                            <div class="sc-details-body">
+                                <p class="small text-body-secondary mb-1">
+                                    {% blocktranslate with title=entry.defaults.title location=entry.defaults.location %}Default: {{ title }} in {{ location }}{% endblocktranslate %}
+                                </p>
+                                <p class="small mb-0">
+                                    {% for person in entry.people %}{{ person }}{% if not forloop.last %}, {% endif %}{% empty %}{% translate "Nobody can see assemblies of this kind yet." %}{% endfor %}
+                                </p>
+                            </div>
+                        </details>
+                    {% endfor %}
+                </div>
+            </section>
+        </div>
+    </div>
+{% endblock %}

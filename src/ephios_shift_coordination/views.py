@@ -4,20 +4,35 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib import messages
-from django.core.exceptions import ValidationError
+from django.contrib.auth.decorators import login_not_required
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Count, Q
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.translation import gettext as _
+from django.utils.translation import ngettext
 from django.views.decorators.http import require_http_methods
+from ephios.core.models import Event
+from guardian.shortcuts import get_objects_for_user
 
-from .access import require_access
+from .access import enabled, require_access
+from .assemblies import (
+    answer,
+    answer_state,
+    callable_types,
+    invite,
+    plan_assembly,
+    resolve_answer,
+    shift_of,
+    would_invite,
+)
 from .dates import calendar_days
 from .drafts import RULE_LABELS, load_plan, save_draft, validate_draft
-from .ephios_integration import eligibility, period_shifts
+from .ephios_integration import assembly_defaults, eligibility, period_shifts
 from .forms import (
+    AssemblyForm,
     PeriodForm,
     ServiceTemplateForm,
     SettingsForm,
@@ -28,6 +43,7 @@ from .forms import (
     SurveyResponseForm,
 )
 from .models import (
+    Assembly,
     Availability,
     PlannedShift,
     PlanningPeriod,
@@ -572,3 +588,130 @@ def staffing_action(request, pk):
     if request.POST.get("next") == "event" and planned.event.event_id:
         return redirect(planned.event.event.get_absolute_url())
     return redirect("ephios_shift_coordination:replacement", pk=planned.event_id)
+
+
+def assembly_rows(user):
+    """Assemblies this person may see, next one first, past ones after them."""
+    visible = get_objects_for_user(user, "core.view_event", klass=Event)
+    rows = [
+        {"assembly": assembly, "shift": shift_of(assembly), "answer": answer_state(assembly, user)}
+        for assembly in Assembly.objects.filter(event__in=visible)
+        .select_related("event", "event__type")
+        .prefetch_related("event__shifts")
+    ]
+    rows = [row for row in rows if row["shift"]]
+    upcoming = sorted(
+        (row for row in rows if row["shift"].end_time > timezone.now()),
+        key=lambda row: row["shift"].start_time,
+    )
+    past = sorted(
+        (row for row in rows if row["shift"].end_time <= timezone.now()),
+        key=lambda row: row["shift"].start_time,
+        reverse=True,
+    )
+    return upcoming, past
+
+
+@require_access("member")
+@require_http_methods(["GET"])
+def assembly_list(request):
+    upcoming, past = assembly_rows(request.user)
+    return render(
+        request,
+        "ephios_shift_coordination/assembly_list.html",
+        {"upcoming": upcoming, "past": past, "types": callable_types(request.user)},
+    )
+
+
+@require_access("member")
+@require_http_methods(["GET", "POST"])
+def assembly_create(request):
+    types = callable_types(request.user)
+    if not types:
+        raise PermissionDenied
+    recipients = [
+        {
+            "type": event_type,
+            "defaults": assembly_defaults(event_type),
+            "people": would_invite(request.user, event_type),
+        }
+        for event_type in types
+    ]
+    form = AssemblyForm(
+        request.POST or None,
+        types=types,
+        defaults={
+            name: recipients[0]["defaults"][name] for name in ("title", "location", "description")
+        },
+    )
+    if request.method == "POST" and form.is_valid():
+        try:
+            assembly = plan_assembly(request.user, **form.assembly_arguments())
+        except ValidationError as exc:
+            form.add_error(None, exc)
+        else:
+            messages.success(
+                request,
+                _("The assembly has been called. The invitation has been sent.")
+                if assembly.invited_at
+                else _("The assembly has been called. Nobody has been notified yet."),
+            )
+            return redirect(assembly.get_absolute_url())
+    return render(
+        request,
+        "ephios_shift_coordination/assembly_form.html",
+        {"form": form, "recipients": recipients},
+    )
+
+
+@require_access("member")
+@require_http_methods(["POST"])
+def assembly_invite(request, pk):
+    assembly = get_object_or_404(Assembly.objects.select_related("event"), pk=pk)
+    recipients = invite(request.user, assembly)
+    messages.success(
+        request,
+        ngettext(
+            "The invitation has been sent to %(count)d person.",
+            "The invitation has been sent to %(count)d people.",
+            len(recipients),
+        )
+        % {"count": len(recipients)},
+    )
+    return redirect(assembly.get_absolute_url())
+
+
+@login_not_required
+@require_http_methods(["GET", "POST"])
+def assembly_respond(request, token):
+    """Answer straight from the invitation mail: the signed link stands in for the login."""
+    if not enabled():
+        raise Http404
+    try:
+        assembly, user = resolve_answer(token)
+    except Conflict as exc:
+        return render(
+            request,
+            "ephios_shift_coordination/assembly_respond.html",
+            {"error": str(exc)},
+            status=409,
+        )
+    error = None
+    if request.method == "POST":
+        try:
+            answer(assembly, user, attending=request.POST.get("action") == "yes")
+        except (Conflict, ValidationError) as exc:
+            error = str(exc) if isinstance(exc, Conflict) else " ".join(exc.messages)
+    return render(
+        request,
+        "ephios_shift_coordination/assembly_respond.html",
+        {
+            "assembly": assembly,
+            "person": user,
+            "shift": shift_of(assembly),
+            "answer": answer_state(assembly, user),
+            "answered": request.method == "POST" and not error,
+            "error": error,
+        },
+        status=409 if error else 200,
+    )

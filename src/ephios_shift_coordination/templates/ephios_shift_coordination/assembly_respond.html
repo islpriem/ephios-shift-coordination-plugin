@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% load i18n static %}
+{% block title %}
+    {% translate "Answer the invitation" %}
+{% endblock %}
+{% block content %}
+    <link rel="stylesheet"
+          href="{% static 'ephios_shift_coordination/planning.css' %}">
+    <div class="row justify-content-center">
+        <div class="col-lg-7">
+            {% if not assembly %}
+                <div class="alert alert-warning" role="alert">{{ error }}</div>
+            {% else %}
+                <h1 class="h3">{{ assembly.event.title }}</h1>
+                <p class="text-body-secondary">
+                    <i class="far fa-calendar" aria-hidden="true"></i>
+                    {{ shift.start_time|date:"DATETIME_FORMAT" }} – {{ shift.end_time|date:"TIME_FORMAT" }}
+                    {% if assembly.event.location %}
+                        · <i class="fas fa-map-marker-alt"
+    aria-hidden="true"></i> {{ assembly.event.location }}
+                    {% endif %}
+                </p>
+                {% if error %}<div class="alert alert-warning"
+     role="alert">{{ error }}</div>{% endif %}
+                {% if answered %}
+                    <div class="alert alert-success" role="status">
+                        {% translate "Thank you, your answer has been saved." %}
+                    </div>
+                {% endif %}
+                <section class="sc-card">
+                    <div class="sc-card-body">
+                        <p>
+                            {% blocktranslate with name=person.get_full_name %}Hello {{ name }}, can you come?{% endblocktranslate %}
+                        </p>
+                        <p class="fw-semibold">
+                            {% if answer.yes %}
+                                <i class="fas fa-check text-success"
+                                   aria-hidden="true"></i> {% translate "You said yes." %}
+                            {% elif answer.no %}
+                                <i class="fas fa-times text-body-secondary"
+                                   aria-hidden="true"></i> {% translate "You said no." %}
+                            {% else %}
+                                <i class="far fa-clock text-body-secondary"
+                                   aria-hidden="true"></i> {% translate "You have not answered yet." %}
+                            {% endif %}
+                        </p>
+                        <form method="post">
+                            {% csrf_token %}
+                            <div class="d-flex flex-wrap gap-2">
+                                <button type="submit"
+                                        name="action"
+                                        value="yes"
+                                        class="btn btn-success">
+                                    <i class="fas fa-check"
+                                       aria-hidden="true"></i> {% translate "Yes, I will be there" %}
+                                </button>
+                                <button type="submit"
+                                        name="action"
+                                        value="no"
+                                        class="btn btn-outline-danger">
+                                    <i class="fas fa-times"
+                                       aria-hidden="true"></i> {% translate "No, I cannot come" %}
+                                </button>
+                            </div>
+                        </form>
+                        <p class="text-body-secondary small mt-3 mb-0">
+                            {% translate "You can change your answer through this link until the assembly starts." %}
+                        </p>
+                    </div>
+                </section>
+                {% if assembly.agenda %}
+                    <section class="sc-card mt-3">
+                        <h2 class="sc-card-title">
+                            <i class="fas fa-list-ol"
+                               aria-hidden="true"></i> {% translate "Agenda" %}
+                        </h2>
+                        <div class="sc-card-body">
+                            <p class="sc-notes mb-0">{{ assembly.agenda }}</p>
+                        </div>
+                    </section>
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}

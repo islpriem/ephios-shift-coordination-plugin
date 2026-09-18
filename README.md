@@ -7,7 +7,8 @@ service templates, recurring event creation, availability surveys, shared planni
 drafts, automatic proposals and publication through native participations are implemented.
 Members can offer to sit in on a service without taking a shift, coordinators can close
 a survey early, and after publication everybody staffed can sign off or step in through
-the replacement overview.
+the replacement overview. Event types can additionally be marked as assemblies, which are
+called with one short form and answered straight from the invitation mail.
 It is based on the [official plugin template](https://github.com/ephios-dev/ephios-plugin-template).
 
 ## Development
@@ -230,6 +231,27 @@ to members who are neither staffed that day nor coordinating.
 People sitting in join as native placeholder participations: they count towards the staffing
 of the shift in ephios and receive the plugin's messages, but they earn no working hours and
 the shift does not appear in their personal ephios calendar.
+
+## Assemblies
+
+An event type is marked in its ephios editor as a service, as an assembly, or as neither.
+Both marks default to off, so existing event types are unaffected. An assembly type also
+carries the default title and location of its assemblies; description, invited groups and
+responsibles are the event type's own ephios fields.
+
+Whoever is responsible for such a type uses **Versammlungen** and calls one with a single
+form: kind, title, location, description, date, times and an optional agenda. The page lists
+who would be invited before anything is sent. Calling an assembly creates one ordinary ephios
+event with one shift that uses instant confirmation, needs no qualification and has no minimum
+staffing, so everybody invited answers for themselves and may change their mind later.
+
+The invitation names the time, the place, the agenda and the person's current answer, and
+carries a signed link. That link opens a page with one yes and one no button without a login;
+nothing is written when the link is merely opened, so mail scanners and link previews cannot
+answer for anybody. Answers go through the native signup logic and appear in ephios like any
+other participation. **Still einberufen** notifies nobody, and the assembly page offers the
+invitation later, together with the date it was last sent. Sending it again is deliberate,
+for example after the agenda changed.
 
 Members use their existing personal ICS URL in ephios calendar settings. The plugin
 creates no ICS files or separate feed: confirmed participations automatically appear

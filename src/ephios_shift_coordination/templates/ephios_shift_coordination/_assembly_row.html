@@ -1,0 +1,29 @@
+{% load i18n %}
+<a class="list-group-item list-group-item-action"
+   href="{{ row.assembly.event.get_absolute_url }}">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+        <span class="fw-semibold">{{ row.assembly.event.title }}</span>
+        {% if row.answer.yes %}
+            <span class="badge text-bg-success"><i class="fas fa-check"
+   aria-hidden="true"></i> {% translate "You said yes" %}</span>
+        {% elif row.answer.no %}
+            <span class="badge text-bg-secondary"><i class="fas fa-times"
+   aria-hidden="true"></i> {% translate "You said no" %}</span>
+        {% else %}
+            <span class="badge text-bg-warning"><i class="far fa-clock"
+   aria-hidden="true"></i> {% translate "No answer yet" %}</span>
+        {% endif %}
+        {% if not row.assembly.invited_at %}
+            <span class="badge text-bg-light">{% translate "not invited yet" %}</span>
+        {% endif %}
+    </div>
+    <div class="text-body-secondary small">
+        <i class="far fa-calendar" aria-hidden="true"></i>
+        {{ row.shift.start_time|date:"DATETIME_FORMAT" }} – {{ row.shift.end_time|date:"TIME_FORMAT" }}
+        {% if row.assembly.event.location %}
+            · <i class="fas fa-map-marker-alt"
+    aria-hidden="true"></i> {{ row.assembly.event.location }}
+        {% endif %}
+        · <i class="fas fa-tag" aria-hidden="true"></i> {{ row.assembly.event.type }}
+    </div>
+</a>

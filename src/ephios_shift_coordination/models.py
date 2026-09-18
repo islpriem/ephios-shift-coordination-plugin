@@ -332,3 +332,16 @@ class RuleOverride(models.Model):
 
     class Meta:
         ordering = ["-created_at", "-pk"]
+
+
+class Assembly(models.Model):
+    """An assembly is a native event with one shift, plus an agenda and an invitation."""
+
+    event = models.OneToOneField("core.Event", models.CASCADE, related_name="assembly")
+    agenda = models.TextField(_("Agenda"), blank=True, max_length=8000)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, models.SET_NULL, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    invited_at = models.DateTimeField(null=True)
+
+    def get_absolute_url(self):
+        return self.event.get_absolute_url()

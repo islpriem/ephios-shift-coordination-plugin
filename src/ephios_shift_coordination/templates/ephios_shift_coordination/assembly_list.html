@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% load i18n static %}
+{% block title %}
+    {% translate "Assemblies" %}
+{% endblock %}
+{% block content %}
+    <link rel="stylesheet"
+          href="{% static 'ephios_shift_coordination/planning.css' %}">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+        <div>
+            <h1 class="mb-1">{% translate "Assemblies" %}</h1>
+            <p class="text-body-secondary mb-0">
+                {% translate "Meetings you are invited to. Answer with one click so the responsibles know who is coming." %}
+            </p>
+        </div>
+        {% if types %}
+            <a class="btn btn-primary"
+               href="{% url 'ephios_shift_coordination:assembly_create' %}">
+                <i class="fas fa-plus" aria-hidden="true"></i> {% translate "Call an assembly" %}
+            </a>
+        {% endif %}
+    </div>
+    <h2 class="h5 mt-4">{% translate "Coming up" %}</h2>
+    <div class="list-group">
+        {% for row in upcoming %}
+            {% include "ephios_shift_coordination/_assembly_row.html" %}
+        {% empty %}
+            <div class="list-group-item text-body-secondary">{% translate "No assembly is planned." %}</div>
+        {% endfor %}
+    </div>
+    {% if past %}
+        <h2 class="h5 mt-4">{% translate "Past assemblies" %}</h2>
+        <div class="list-group">
+            {% for row in past %}
+                {% include "ephios_shift_coordination/_assembly_row.html" %}
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endblock %}

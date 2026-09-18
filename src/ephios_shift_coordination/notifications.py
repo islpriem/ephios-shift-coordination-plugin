@@ -1,4 +1,4 @@
-"""Business messages: survey invitation, reminder, published plan and staffing changes."""
+"""Business messages: survey, published plan, staffing changes and assembly invitations."""
 
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -7,10 +7,12 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _
+from ephios.core.models import AbstractParticipation
+from ephios.core.models.users import Notification
 from ephios.core.services.notifications.types import AbstractNotificationHandler
 from ephios.core.templatetags.settings_extras import make_absolute
 
-from .models import PlannedShift, PlanningPeriod, SurveyResponse
+from .models import Assembly, PlannedShift, PlanningPeriod, SurveyResponse
 from .surveys import recommendation, response_is_actionable
 
 
@@ -411,3 +413,105 @@ class StaffingChanged(ShiftStaffingHandler):
             for row in staffing(planned)["rows"]
         )
         return staffed != (notification.data["change"] == "assigned")
+
+
+class AssemblyInvitation(AbstractNotificationHandler):
+    slug = "shift_coordination_assembly_invitation"
+    title = _("Invitation to an assembly")
+
+    @classmethod
+    def send(cls, assembly, recipients):
+        for user in recipients:
+            Notification.objects.create(user=user, slug=cls.slug, data={"assembly_id": assembly.pk})
+
+    @classmethod
+    def assembly(cls, notification):
+        return (
+            Assembly.objects.filter(pk=notification.data["assembly_id"])
+            .select_related("event")
+            .first()
+        )
+
+    @classmethod
+    def when(cls, assembly):
+        shift = assembly.event.shifts.first()
+        if shift is None:
+            return ""
+        return "{start} – {end}".format(
+            start=date_format(timezone.localtime(shift.start_time), "DATETIME_FORMAT"),
+            end=date_format(timezone.localtime(shift.end_time), "TIME_FORMAT"),
+        )
+
+    @classmethod
+    def link(cls, assembly, user):
+        from .assemblies import answer_link
+
+        return make_absolute(
+            reverse(
+                "ephios_shift_coordination:assembly_respond", args=[answer_link(assembly, user)]
+            )
+        )
+
+    @classmethod
+    def status_line(cls, assembly, user):
+        from .assemblies import own_state
+
+        state = own_state(assembly, user)
+        if state == AbstractParticipation.States.CONFIRMED:
+            return _("You have said yes so far.")
+        if state == AbstractParticipation.States.USER_DECLINED:
+            return _("You have said no so far.")
+        return _("You have not answered yet.")
+
+    @classmethod
+    def get_subject(cls, notification):
+        assembly = cls.assembly(notification)
+        if assembly is None:
+            return str(cls.title)
+        return _("Invitation: {title}, {when}").format(
+            title=assembly.event.title, when=cls.when(assembly)
+        )
+
+    @classmethod
+    def get_body(cls, notification):
+        assembly = cls.assembly(notification)
+        if assembly is None:
+            return ""
+        event = assembly.event
+        lines = [
+            _("Hello {name},").format(name=notification.user.get_full_name()),
+            "",
+            _("you are invited to {title} on {when}.").format(
+                title=event.title, when=cls.when(assembly)
+            ),
+        ]
+        if event.location:
+            lines.append(_("Where: {location}").format(location=event.location))
+        if event.description:
+            lines += ["", event.description]
+        if assembly.agenda:
+            lines += ["", _("Agenda:"), ""]
+            lines += [f"- {item.strip()}" for item in assembly.agenda.splitlines() if item.strip()]
+        lines += [
+            "",
+            cls.status_line(assembly, notification.user),
+            _("Please tell us whether you can come: [answer here]({link}).").format(
+                link=cls.link(assembly, notification.user)
+            ),
+        ]
+        return text(lines)
+
+    @classmethod
+    def get_actions(cls, notification):
+        assembly = cls.assembly(notification)
+        if assembly is None:
+            return []
+        return [(str(_("Answer the invitation")), cls.link(assembly, notification.user))]
+
+    @classmethod
+    def is_obsolete(cls, notification):
+        from .access import enabled
+
+        assembly = cls.assembly(notification)
+        shift = assembly.event.shifts.first() if assembly else None
+        return not enabled() or shift is None or shift.end_time <= timezone.now()
