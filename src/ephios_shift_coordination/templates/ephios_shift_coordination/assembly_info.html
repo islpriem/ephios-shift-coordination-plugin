@@ -24,7 +24,45 @@
             {% for item in agenda %}<li>{{ item }}</li>{% endfor %}
         </ol>
     {% endif %}
+    {% if minutes %}
+        <p class="mb-1 mt-2 fw-semibold">{% translate "Assembly minutes" %}</p>
+        <ul class="mb-0">
+            {% for record in minutes %}
+                <li>
+                    <a href="{% url 'ephios_shift_coordination:minutes_file' record.pk %}"
+                       target="_blank"
+                       rel="noopener">
+                        <i class="far fa-file-pdf" aria-hidden="true"></i>
+                        {% blocktranslate with moment=record.uploaded_at|date:"SHORT_DATE_FORMAT" %}filed on {{ moment }}{% endblocktranslate %}
+                    </a>
+                    {% if responsible %}
+                        <form method="post"
+                              class="d-inline"
+                              action="{% url 'ephios_shift_coordination:minutes_delete' record.pk %}">
+                            {% csrf_token %}
+                            <button type="submit"
+                                    class="btn btn-sm btn-link text-danger p-0">{% translate "Delete" %}</button>
+                        </form>
+                    {% endif %}
+                </li>
+            {% endfor %}
+        </ul>
+    {% endif %}
     {% if responsible %}
+        <form method="post"
+              enctype="multipart/form-data"
+              class="d-flex flex-wrap align-items-end gap-2 mt-2"
+              action="{% url 'ephios_shift_coordination:minutes_upload' assembly.pk %}">
+            {% csrf_token %}
+            <div>
+                <label class="form-label small mb-1"
+                       for="minutes-file">{% translate "File the assembly minutes as PDF" %}</label>
+                {{ minutes_form.file }}
+            </div>
+            <button type="submit" class="btn btn-sm btn-outline-primary">
+                <i class="fas fa-upload" aria-hidden="true"></i> {% translate "File minutes" %}
+            </button>
+        </form>
         <p class="small text-body-secondary mb-0 mt-2">
             <i class="far fa-bell" aria-hidden="true"></i>
             {% if reminders.sent %}

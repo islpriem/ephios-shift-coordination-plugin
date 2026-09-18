@@ -8,7 +8,7 @@ from django.contrib.auth.decorators import login_not_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Count, Q
-from django.http import Http404, JsonResponse
+from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -33,6 +33,7 @@ from .drafts import RULE_LABELS, load_plan, save_draft, validate_draft
 from .ephios_integration import assembly_defaults, eligibility, period_shifts
 from .forms import (
     AssemblyForm,
+    MinutesForm,
     PeriodForm,
     ServiceTemplateForm,
     SettingsForm,
@@ -42,8 +43,10 @@ from .forms import (
     SurveyOpeningForm,
     SurveyResponseForm,
 )
+from .minutes import display_name, file_minutes, remove, visible
 from .models import (
     Assembly,
+    AssemblyMinutes,
     Availability,
     PlannedShift,
     PlanningPeriod,
@@ -715,3 +718,53 @@ def assembly_respond(request, token):
         },
         status=409 if error else 200,
     )
+
+
+@require_access("member")
+@require_http_methods(["GET"])
+def minutes_list(request):
+    search = request.GET.get("q", "").strip()
+    return render(
+        request,
+        "ephios_shift_coordination/minutes_list.html",
+        {"minutes": visible(request.user, search), "search": search},
+    )
+
+
+@require_access("member")
+@require_http_methods(["POST"])
+def minutes_upload(request, pk):
+    assembly = get_object_or_404(Assembly.objects.select_related("event"), pk=pk)
+    form = MinutesForm(request.POST, request.FILES)
+    if form.is_valid():
+        file_minutes(request.user, assembly, form.cleaned_data["file"])
+        messages.success(request, _("The assembly minutes have been filed."))
+    else:
+        messages.error(request, " ".join(" ".join(errors) for errors in form.errors.values()))
+    return redirect(assembly.get_absolute_url())
+
+
+@require_access("member")
+@require_http_methods(["POST"])
+def minutes_delete(request, pk):
+    minutes = get_object_or_404(AssemblyMinutes.objects.select_related("assembly__event"), pk=pk)
+    assembly = minutes.assembly
+    remove(request.user, minutes)
+    messages.success(request, _("The assembly minutes have been deleted."))
+    return redirect(assembly.get_absolute_url())
+
+
+@require_access("member")
+@require_http_methods(["GET"])
+def minutes_file(request, pk):
+    """Serve the PDF for reading in the browser.
+
+    ephios' own accelerated media response always says attachment, so this view builds its
+    own; the media directory itself stays unreachable from the web either way.
+    """
+    minutes = get_object_or_404(AssemblyMinutes.objects.select_related("assembly__event"), pk=pk)
+    if not request.user.has_perm("core.view_event", minutes.assembly.event):
+        raise PermissionDenied
+    response = FileResponse(minutes.file.open("rb"), content_type="application/pdf")
+    response["Content-Disposition"] = f'inline; filename="{display_name(minutes)}"'
+    return response

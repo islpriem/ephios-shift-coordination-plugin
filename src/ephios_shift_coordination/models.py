@@ -3,8 +3,9 @@ from datetime import date, datetime, time, timedelta
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.validators import MinValueValidator
-from django.db import models
+from django.core.validators import FileExtensionValidator, MinValueValidator
+from django.db import models, transaction
+from django.dispatch import receiver
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -383,6 +384,11 @@ class ReminderDispatch(models.Model):
         ]
 
 
+def minutes_path(instance, filename):
+    """A generated name: what somebody called the upload is not kept."""
+    return f"assembly-minutes/{uuid.uuid4()}.pdf"
+
+
 class Assembly(models.Model):
     """An assembly is a native event with one shift, plus an agenda and an invitation."""
 
@@ -394,3 +400,23 @@ class Assembly(models.Model):
 
     def get_absolute_url(self):
         return self.event.get_absolute_url()
+
+
+class AssemblyMinutes(models.Model):
+    """The minutes of one assembly, filed as PDF by the people responsible for it."""
+
+    assembly = models.ForeignKey(Assembly, models.CASCADE, related_name="minutes")
+    file = models.FileField(
+        _("File"), upload_to=minutes_path, validators=[FileExtensionValidator(["pdf"])]
+    )
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, models.SET_NULL, null=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-uploaded_at", "-pk"]
+
+
+@receiver(models.signals.post_delete, sender=AssemblyMinutes)
+def drop_minutes_file(sender, instance, using, **kwargs):
+    """Removing the row has to take the blob with it, as ephios' own files plugin does."""
+    transaction.on_commit(lambda: instance.file.delete(save=False), using)

@@ -136,6 +136,28 @@ print('reminded')
             ]
             assert len(reminder) == 1
             assert "Bisher hast du zugesagt" in mail_body(reminder[0]["ID"])
+            # Minutes are filed on the assembly and found again through the search.
+            coordinator.locator('[name="file"]').set_input_files(
+                files=[
+                    {
+                        "name": "Protokoll aus dem Downloads-Ordner.pdf",
+                        "mimeType": "application/pdf",
+                        "buffer": b"%PDF-1.4 Protokoll",
+                    }
+                ]
+            )
+            with coordinator.expect_navigation(wait_until="domcontentloaded"):
+                coordinator.get_by_role("button", name="Protokoll ablegen").click()
+            expect(coordinator.get_by_text("abgelegt am", exact=False).first).to_be_visible()
+            coordinator.goto(f"{base}/shift-coordination/minutes/?q=Akzeptanzversammlung")
+            link = coordinator.get_by_role("link", name="Akzeptanzversammlung", exact=False).first
+            expect(link).to_be_visible()
+            served = coordinator.request.get(f"{base}{link.get_attribute('href')}")
+            assert served.status == 200
+            assert served.headers["content-type"] == "application/pdf"
+            # The browser shows the PDF instead of downloading it, under a generated name.
+            assert served.headers["content-disposition"].startswith("inline;")
+            assert "Downloads" not in served.headers["content-disposition"]
         except Exception:
             capture_failure(coordinator, "e2e-assembly-coordinator")
             capture_failure(invitee, "e2e-assembly-invitee")

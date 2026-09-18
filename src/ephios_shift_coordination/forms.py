@@ -7,8 +7,10 @@ import holidays
 from django import forms
 from django.conf import settings
 from django.contrib.auth.models import Group, Permission
+from django.core.validators import FileExtensionValidator
 from django.db import transaction
 from django.forms import BaseInlineFormSet, inlineformset_factory
+from django.template.defaultfilters import filesizeformat
 from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _
@@ -624,3 +626,23 @@ class AssemblyForm(forms.Form):
             "agenda": data["agenda"],
             "silent": data["silent"],
         }
+
+
+class MinutesForm(forms.Form):
+    """One PDF per upload; the file name is replaced by a generated one."""
+
+    file = forms.FileField(
+        label=_("Assembly minutes as PDF"),
+        validators=[FileExtensionValidator(["pdf"])],
+        widget=forms.FileInput(attrs={"accept": ".pdf"}),
+    )
+
+    def clean_file(self):
+        upload = self.cleaned_data["file"]
+        _used, free = settings.GET_USERCONTENT_QUOTA()
+        if upload.size > free:
+            raise forms.ValidationError(
+                _("The file is too large. There are only %(quota)s available."),
+                params={"quota": filesizeformat(free)},
+            )
+        return upload

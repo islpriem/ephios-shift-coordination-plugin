@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% load i18n static %}
+{% block title %}
+    {% translate "Assembly minutes" %}
+{% endblock %}
+{% block content %}
+    <link rel="stylesheet"
+          href="{% static 'ephios_shift_coordination/planning.css' %}">
+    <h1>{% translate "Assembly minutes" %}</h1>
+    <p class="text-body-secondary">
+        {% translate "The minutes of every assembly you may see. Search by title, kind of assembly, date or a word from the agenda." %}
+    </p>
+    <form method="get" class="row g-2 align-items-center mb-3">
+        <div class="col-sm-8 col-md-6">
+            <label class="visually-hidden" for="minutes-search">{% translate "Search" %}</label>
+            <input type="search"
+                   id="minutes-search"
+                   name="q"
+                   value="{{ search }}"
+                   class="form-control"
+                   placeholder="{% translate 'Search minutes' %}">
+        </div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-outline-primary">
+                <i class="fas fa-search" aria-hidden="true"></i> {% translate "Search" %}
+            </button>
+        </div>
+    </form>
+    <div class="list-group">
+        {% for record in minutes %}
+            <a class="list-group-item list-group-item-action"
+               href="{% url 'ephios_shift_coordination:minutes_file' record.pk %}"
+               target="_blank"
+               rel="noopener">
+                <span class="fw-semibold">{{ record.assembly.event.title }}</span>
+                <div class="text-body-secondary small">
+                    <i class="far fa-calendar" aria-hidden="true"></i>
+                    {% for shift in record.assembly.event.shifts.all %}{{ shift.start_time|date:"DATE_FORMAT" }}{% endfor %}
+                    · <i class="fas fa-tag" aria-hidden="true"></i> {{ record.assembly.event.type }}
+                    · <i class="fas fa-upload" aria-hidden="true"></i>
+                    {% blocktranslate with person=record.uploaded_by|default:"—" moment=record.uploaded_at|date:"SHORT_DATE_FORMAT" %}filed by {{ person }} on {{ moment }}{% endblocktranslate %}
+                </div>
+            </a>
+        {% empty %}
+            <div class="list-group-item text-body-secondary">
+                {% if search %}
+                    {% translate "No minutes match this search." %}
+                {% else %}
+                    {% translate "No assembly minutes have been filed yet." %}
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+{% endblock %}

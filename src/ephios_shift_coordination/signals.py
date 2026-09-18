@@ -40,6 +40,13 @@ def navigation(sender, request, **kwargs):
     )
     links.append(
         {
+            "label": _("Assembly minutes"),
+            "url": reverse("ephios_shift_coordination:minutes_list"),
+            "active": request.path.startswith(reverse("ephios_shift_coordination:minutes_list")),
+        }
+    )
+    links.append(
+        {
             "label": _("Assemblies"),
             "url": reverse("ephios_shift_coordination:assembly_list"),
             "active": request.path.startswith(reverse("ephios_shift_coordination:assembly_list")),
@@ -117,6 +124,7 @@ def event_info(sender, request, event, **kwargs):
 def assembly_info(request, event):
     """The agenda and the invitation state, shown on the native event page."""
     from .assemblies import answer_state, invited, shift_of
+    from .forms import MinutesForm
     from .models import Assembly
     from .reminders import overview
 
@@ -132,6 +140,8 @@ def assembly_info(request, event):
             "answer": answer_state(assembly, request.user),
             "responsible": responsible,
             "recipients": invited(event) if responsible else [],
+            "minutes": assembly.minutes.all(),
+            "minutes_form": MinutesForm(),
             "reminders": overview(shift_of(assembly))
             if responsible and shift_of(assembly)
             else None,

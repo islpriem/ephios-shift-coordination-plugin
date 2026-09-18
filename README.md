@@ -256,6 +256,16 @@ other participation. **Still einberufen** notifies nobody, and the assembly page
 invitation later, together with the date it was last sent. Sending it again is deliberate,
 for example after the agenda changed.
 
+## Assembly minutes
+
+Whoever is responsible for an assembly files its minutes as a PDF on the assembly page. The
+uploaded file name is discarded and replaced by a generated one, so nobody's folder habits end
+up on the server; what the browser shows is built from the assembly instead. **Versammlungs-
+protokolle** lists the minutes of every assembly the viewer may see, with a search over title,
+kind of assembly, agenda and date in either notation. Opening one shows the PDF in a new tab
+rather than downloading it. Only PDFs are accepted, and the same disk quota as ephios' own file
+plugin applies; deleting a minutes entry deletes the file with it.
+
 ## Reminders
 
 Planning settings carry two reminder rules: one for services and one for assemblies. Each is a

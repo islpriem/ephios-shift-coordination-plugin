@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: ephios-shift-coordination-plugin 0.1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-18 17:34+0200\n"
+"POT-Creation-Date: 2026-09-18 17:59+0200\n"
 "Language: de\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -25,7 +25,7 @@ msgstr "Verfügbarkeitsumfragen und Dienstplanung für ephios"
 msgid "You cannot publish events for any group."
 msgstr "Du darfst für keine Gruppe Veranstaltungen veröffentlichen."
 
-#: assemblies.py:108 forms.py:610
+#: assemblies.py:108 forms.py:612
 msgid "The assembly has to end after it starts."
 msgstr "Die Versammlung muss nach ihrem Beginn enden."
 
@@ -151,546 +151,563 @@ msgstr "Eine Schicht wurde geändert oder enthält bereits Teilnahmen. Bitte die
 msgid "Event type qualifications have changed since the survey opened."
 msgstr "Die Qualifikationsanforderungen des Veranstaltungstyps wurden seit Öffnung der Umfrage geändert."
 
-#: forms.py:23
+#: forms.py:25
 msgid "Monday"
 msgstr "Montag"
 
-#: forms.py:24
+#: forms.py:26
 msgid "Tuesday"
 msgstr "Dienstag"
 
-#: forms.py:25
+#: forms.py:27
 msgid "Wednesday"
 msgstr "Mittwoch"
 
-#: forms.py:26
+#: forms.py:28
 msgid "Thursday"
 msgstr "Donnerstag"
 
-#: forms.py:27
+#: forms.py:29
 msgid "Friday"
 msgstr "Freitag"
 
-#: forms.py:28
+#: forms.py:30
 msgid "Saturday"
 msgstr "Samstag"
 
-#: forms.py:29
+#: forms.py:31
 msgid "Sunday"
 msgstr "Sonntag"
 
-#: forms.py:44
+#: forms.py:46
 msgid "Everybody staffed for a service, including anybody sitting in, is reminded this many days before it starts. Separate several values with commas, 0 means the same day. Empty means no reminder."
 msgstr "Alle, die für einen Dienst eingeteilt sind, auch Beisitzende, werden so viele Tage vorher erinnert. Mehrere Werte mit Komma trennen, 0 bedeutet am selben Tag. Leer bedeutet keine Erinnerung."
 
-#: forms.py:49
+#: forms.py:51
 msgid "Everybody invited to an assembly is reminded this many days before it starts, whatever they answered. Separate several values with commas, 0 means the same day. Empty means no reminder."
 msgstr "Alle, die zu einer Versammlung eingeladen sind, werden so viele Tage vorher erinnert, unabhängig von ihrer Antwort. Mehrere Werte mit Komma trennen, 0 bedeutet am selben Tag. Leer bedeutet keine Erinnerung."
 
-#: forms.py:56
+#: forms.py:58
 msgid "Preselected weekdays for new planning periods."
 msgstr "Vorauswahl der Wochentage für neue Planungsintervalle."
 
-#: forms.py:57
+#: forms.py:59
 msgid "Country of the holiday calendar."
 msgstr "Land des Feiertagskalenders."
 
-#: forms.py:58
+#: forms.py:60
 msgid "Region of the holiday calendar. Without a region, holidays cannot be skipped."
 msgstr "Region des Feiertagskalenders. Ohne Region können Feiertage nicht übersprungen werden."
 
-#: forms.py:59
+#: forms.py:61
 msgid "Preselection for new planning periods: skip public holidays."
 msgstr "Vorauswahl für neue Planungsintervalle: an Feiertagen keine Dienste vorschlagen."
 
-#: forms.py:60
+#: forms.py:62
 msgid "Default time to answer, counted from opening a survey."
 msgstr "Voreingestellte Antwortzeit, gerechnet ab dem Öffnen der Umfrage."
 
-#: forms.py:62
+#: forms.py:64
 msgid "Members without a complete answer are reminded this many days before the deadline. Separate several values with commas, for example 3, 1. Empty means no reminder."
 msgstr "Mitglieder ohne vollständige Antwort werden so viele Tage vor Fristende erinnert. Mehrere Werte mit Komma trennen, zum Beispiel 3, 1. Leer bedeutet keine Erinnerung."
 
-#: forms.py:66
+#: forms.py:68
 msgid "Most shifts one person takes per calendar week (Monday to Sunday) within one event type."
 msgstr "Höchstzahl der Schichten pro Person und Kalenderwoche (Montag bis Sonntag) innerhalb eines Veranstaltungstyps."
 
-#: forms.py:68
+#: forms.py:70
 msgid "Keep the day after a service free for that person."
 msgstr "Den Tag nach einem Dienst für diese Person freihalten."
 
-#: forms.py:70
+#: forms.py:72
 msgid "Time budget for one automatic proposal. A higher value can improve a proposal, but the request takes longer; application and proxy timeouts have to be above it."
 msgstr "Rechenzeit für einen automatischen Vorschlag. Ein höherer Wert kann den Vorschlag verbessern, verlängert aber die Wartezeit; die Zeitlimits von Anwendung und Proxy müssen darüber liegen."
 
-#: forms.py:74
+#: forms.py:76
 msgid "Preselection for new planning periods: members may offer to sit in on a service. Sitting in needs no qualification, counts as staffing and earns no working hours."
 msgstr "Vorauswahl für neue Planungsintervalle: Mitglieder können anbieten, bei einem Dienst beizusitzen. Beisitz braucht keine Qualifikation, zählt zur Besetzung und bringt keine Arbeitsstunden."
 
-#: forms.py:78
+#: forms.py:80
 msgid "Regularly staffed people a shift needs at least once somebody sits in. This prevents shifts that are staffed by people sitting in only."
 msgstr "So viele regulär eingeteilte Personen braucht eine Schicht mindestens, sobald jemand beisitzt. Das verhindert Schichten, die nur mit Beisitz besetzt sind."
 
-#: forms.py:84
+#: forms.py:86
 msgid "Services are suggested for these weekdays. You pick the single dates below."
 msgstr "An diesen Wochentagen werden Dienste vorgeschlagen. Die einzelnen Termine wählst du darunter aus."
 
-#: forms.py:85
+#: forms.py:87
 msgid "Skip the public holidays of the configured region."
 msgstr "Feiertage der eingerichteten Region überspringen."
 
-#: forms.py:86
+#: forms.py:88
 msgid "Used for the response deadline suggested when you open the survey."
 msgstr "Wird für die vorgeschlagene Rückmeldefrist beim Öffnen der Umfrage verwendet."
 
-#: forms.py:88
+#: forms.py:90
 msgid "Suggested reminders when you open the survey. Separate several values with commas."
 msgstr "Vorschlag für die Erinnerungen beim Öffnen der Umfrage. Mehrere Werte mit Komma trennen."
 
-#: forms.py:90
+#: forms.py:92
 msgid "Most shifts per person and calendar week (Monday to Sunday)."
 msgstr "Höchstzahl der Schichten pro Person und Kalenderwoche (Montag bis Sonntag)."
 
-#: forms.py:91
+#: forms.py:93
 msgid "Nobody is planned on two days in a row."
 msgstr "Niemand wird an zwei aufeinanderfolgenden Tagen eingeplant."
 
-#: forms.py:93
+#: forms.py:95
 msgid "Members may offer to sit in on a service of this period: no qualification required, counted as staffing, no working hours."
 msgstr "Mitglieder können anbieten, bei einem Dienst dieses Intervalls beizusitzen: ohne Qualifikation, zählt zur Besetzung, ohne Arbeitsstunden."
 
-#: forms.py:104
+#: forms.py:106
 msgid "Enter whole numbers separated by commas."
 msgstr "Bitte ganze Zahlen mit Kommas getrennt eingeben."
 
-#: forms.py:110 models.py:39
+#: forms.py:112 models.py:40
 msgid "Weekdays"
 msgstr "Wochentage"
 
-#: forms.py:113 forms.py:356
+#: forms.py:115 forms.py:358
 msgid "Reminders in days before the deadline"
 msgstr "Erinnerungen in Tagen vor Fristende"
 
-#: forms.py:116 models.py:40
+#: forms.py:118 models.py:41
 msgid "Holiday country"
 msgstr "Feiertagsland"
 
-#: forms.py:119 models.py:41
+#: forms.py:121 models.py:42
 msgid "Holiday region"
 msgstr "Feiertagsregion"
 
-#: forms.py:129
+#: forms.py:131
 msgid "Select a region"
 msgstr "Region auswählen"
 
-#: forms.py:144
+#: forms.py:146
 msgid "Groups allowed to manage planning"
 msgstr "Gruppen mit Planungsberechtigung"
 
-#: forms.py:148
+#: forms.py:150
 msgid "Members of these groups create planning periods, open surveys and publish plans. In ephios they also need the rights to create events and to publish them for the template's groups."
 msgstr "Mitglieder dieser Gruppen legen Planungsintervalle an, öffnen Umfragen und veröffentlichen Dienstpläne. In ephios brauchen sie zusätzlich das Recht, Veranstaltungen anzulegen und für die Gruppen der Vorlage zu veröffentlichen."
 
-#: forms.py:154
+#: forms.py:156
 msgid "Remind about services this many days before"
 msgstr "An Dienste erinnern, so viele Tage vorher"
 
-#: forms.py:157
+#: forms.py:159
 msgid "Remind about assemblies this many days before"
 msgstr "An Versammlungen erinnern, so viele Tage vorher"
 
-#: forms.py:210
+#: forms.py:212
 msgid "Title of every event created from this template."
 msgstr "Titel jeder Veranstaltung, die aus dieser Vorlage entsteht."
 
-#: forms.py:211
+#: forms.py:213
 msgid "Shown on the event page in ephios."
 msgstr "Wird auf der Veranstaltungsseite in ephios angezeigt."
 
-#: forms.py:213
+#: forms.py:215
 msgid "Weekly limits, overlaps and consecutive days only count services of this type."
 msgstr "Wochenlimit, Überschneidungen und Folgetage zählen nur Dienste dieses Typs."
 
-#: forms.py:215
+#: forms.py:217
 msgid "These groups see the services and are invited to the survey."
 msgstr "Diese Gruppen sehen die Dienste und werden zur Umfrage eingeladen."
 
-#: forms.py:217
+#: forms.py:219
 msgid "May edit the created events and receive messages about missing staff. Coordinators need this to plan the period."
 msgstr "Dürfen die erzeugten Veranstaltungen bearbeiten und werden über fehlende Besetzung informiert. Die Koordination braucht dieses Recht für die Planung."
 
-#: forms.py:220
+#: forms.py:222
 msgid "Additional responsible people besides the groups."
 msgstr "Zusätzliche verantwortliche Personen neben den Gruppen."
 
-#: forms.py:242
+#: forms.py:244
 msgid "Short name, for example phone or early shift."
 msgstr "Kurzer Name, zum Beispiel Telefon oder Frühdienst."
 
-#: forms.py:243
+#: forms.py:245
 msgid "When people meet, at the latest at the start."
 msgstr "Wann sich alle treffen, spätestens zum Beginn."
 
-#: forms.py:244
+#: forms.py:246
 msgid "Choose the next day for shifts that run past midnight."
 msgstr "Für Schichten über Mitternacht den Folgetag wählen."
 
-#: forms.py:245
+#: forms.py:247
 msgid "Automatic planning staffs exactly this many people, or nobody."
 msgstr "Die automatische Planung besetzt genau so viele Personen – oder niemanden."
 
-#: forms.py:246
+#: forms.py:248
 msgid "Empty means no limit. More people only through a manual exception."
 msgstr "Leer bedeutet unbegrenzt. Mehr Personen nur über eine manuelle Ausnahme."
 
-#: forms.py:247
+#: forms.py:249
 msgid "Only members holding all of these are asked for this shift."
 msgstr "Nur Mitglieder mit all diesen Qualifikationen werden für diese Schicht gefragt."
 
-#: forms.py:260
+#: forms.py:262
 msgid "Each shift must belong to this template and appear only once."
 msgstr "Jede Schicht muss zu dieser Vorlage gehören und darf nur einmal vorkommen."
 
-#: forms.py:280 templates/ephios_shift_coordination/template_form.html:6
+#: forms.py:282 templates/ephios_shift_coordination/template_form.html:6
 msgid "Service template"
 msgstr "Dienstvorlage"
 
-#: forms.py:283
+#: forms.py:285
 msgid "Sets title, location, visibility and the shifts of every service in this period."
 msgstr "Legt Titel, Ort, Sichtbarkeit und die Schichten jedes Dienstes in diesem Intervall fest."
 
-#: forms.py:287
+#: forms.py:289
 msgid "First day"
 msgstr "Erster Tag"
 
-#: forms.py:290
+#: forms.py:292
 msgid "Last day"
 msgstr "Letzter Tag"
 
-#: forms.py:307
+#: forms.py:309
 msgid "Configure a holiday region in the planning settings to use this."
 msgstr "Dafür in den Planungseinstellungen eine Feiertagsregion einrichten."
 
-#: forms.py:317
+#: forms.py:319
 msgid "The last day must not precede the first day."
 msgstr "Der letzte Tag darf nicht vor dem ersten Tag liegen."
 
-#: forms.py:332
+#: forms.py:334
 msgid "Invalid selected date."
 msgstr "Ungültiges ausgewähltes Datum."
 
-#: forms.py:341 services.py:104
+#: forms.py:343 services.py:104
 msgid "Select distinct dates within the period."
 msgstr "Bitte unterschiedliche Termine innerhalb des Intervalls auswählen."
 
-#: forms.py:348
+#: forms.py:350
 msgid "Response deadline"
 msgstr "Rückmeldefrist"
 
-#: forms.py:351
+#: forms.py:353
 msgid "Until then members can answer and change their answer. It has to be before the first shift starts."
 msgstr "Bis dahin können Mitglieder antworten und ihre Antwort ändern. Die Frist muss vor dem Beginn der ersten Schicht liegen."
 
-#: forms.py:359
+#: forms.py:361
 msgid "Members without a complete answer get a reminder. Separate several values with commas, for example 3, 1. Empty means no reminder."
 msgstr "Mitglieder ohne vollständige Antwort erhalten eine Erinnerung. Mehrere Werte mit Komma trennen, zum Beispiel 3, 1. Leer bedeutet keine Erinnerung."
 
-#: forms.py:364
+#: forms.py:366
 msgid "Recommended shifts per person"
 msgstr "Empfohlene Schichten pro Person"
 
-#: forms.py:367
+#: forms.py:369
 msgid "Shown to members as a suggestion for their personal maximum."
 msgstr "Wird den Mitgliedern als Vorschlag für ihre persönliche Höchstzahl angezeigt."
 
-#: forms.py:380
+#: forms.py:382
 msgid "Close the survey now. Answers become read-only, planning continues."
 msgstr "Umfrage jetzt schließen. Antworten sind dann nur noch lesbar, die Planung geht weiter."
 
-#: forms.py:387
+#: forms.py:389
 msgid "Your personal maximum"
 msgstr "Deine persönliche Höchstzahl"
 
-#: forms.py:391
+#: forms.py:393
 msgid "How many shifts may we assign to you at most in this period? Enter 0 if you cannot take a shift this time."
 msgstr "Wie viele Schichten dürfen wir dir in diesem Zeitraum höchstens zuteilen? Trage 0 ein, wenn du diesmal keine Schicht übernehmen kannst."
 
-#: forms.py:396
+#: forms.py:398
 msgid "Notes for the coordinators"
 msgstr "Anmerkungen für die Koordination"
 
-#: forms.py:401
+#: forms.py:403
 msgid "Optional, for example holidays or who you would like to work with. Only coordinators read this."
 msgstr "Optional, zum Beispiel Urlaub oder mit wem du gern zusammen Dienst machst. Das liest nur die Koordination."
 
-#: forms.py:448
+#: forms.py:450
 #, python-brace-format
 msgid "{shift} on {date}"
 msgstr "{shift} am {date}"
 
-#: forms.py:455
+#: forms.py:457
 msgid "You currently do not meet the requirements for this shift."
 msgstr "Du erfüllst die Anforderungen dieser Schicht aktuell nicht."
 
-#: forms.py:474
+#: forms.py:476
 #, python-brace-format
 msgid "Sit in on the service on {date}"
 msgstr "Beim Dienst am {date} beisitzen"
 
-#: forms.py:516
+#: forms.py:518
 msgid "Rate exactly the originally offered shifts."
 msgstr "Bitte genau die ursprünglich angebotenen Schichten bewerten."
 
-#: forms.py:530
+#: forms.py:532
 msgid "Confirm every recorded exception once more"
 msgstr "Bestätige jede dokumentierte Ausnahme noch einmal"
 
-#: forms.py:535
+#: forms.py:537
 msgid "I publish although some shifts are missing people."
 msgstr "Ich veröffentliche, obwohl in einigen Schichten Personen fehlen."
 
-#: forms.py:539
+#: forms.py:541
 msgid "I checked this plan and want to publish it. Everybody staffed gets a message."
 msgstr "Ich habe den Dienstplan geprüft und möchte ihn veröffentlichen. Alle Eingeteilten bekommen eine Nachricht."
 
-#: forms.py:555
+#: forms.py:557
 msgid "Sign up"
 msgstr "Eintragen"
 
-#: forms.py:555 templates/ephios_shift_coordination/event_info.html:60
+#: forms.py:557 templates/ephios_shift_coordination/event_info.html:60
 msgid "Sit in"
 msgstr "Beisitzen"
 
-#: forms.py:555
+#: forms.py:557
 msgid "Sign off"
 msgstr "Austragen"
 
-#: forms.py:564
+#: forms.py:566
 msgid "Kind of assembly"
 msgstr "Art der Versammlung"
 
-#: forms.py:567
+#: forms.py:569
 msgid "Who is invited and who is responsible comes from this kind."
 msgstr "Wer eingeladen wird und wer verantwortlich ist, kommt aus dieser Art."
 
-#: forms.py:569 models.py:109
+#: forms.py:571 models.py:110
 msgid "Title"
 msgstr "Titel"
 
-#: forms.py:570 models.py:111
+#: forms.py:572 models.py:112
 msgid "Location"
 msgstr "Ort"
 
-#: forms.py:572 models.py:110
+#: forms.py:574 models.py:111
 msgid "Description"
 msgstr "Beschreibung"
 
-#: forms.py:575
+#: forms.py:577
 msgid "Date"
 msgstr "Datum"
 
-#: forms.py:578
+#: forms.py:580
 msgid "Start"
 msgstr "Beginn"
 
-#: forms.py:581
+#: forms.py:583
 msgid "End"
 msgstr "Ende"
 
-#: forms.py:584 models.py:390
+#: forms.py:586 models.py:396
 #: templates/ephios_shift_coordination/assembly_info.html:22
 #: templates/ephios_shift_coordination/assembly_respond.html:75
 msgid "Agenda"
 msgstr "Tagesordnung"
 
-#: forms.py:588
+#: forms.py:590
 msgid "One item per line. It is shown at the assembly and sent with the invitation."
 msgstr "Ein Punkt pro Zeile. Sie wird bei der Versammlung gezeigt und mit der Einladung verschickt."
 
-#: forms.py:591
+#: forms.py:593
 msgid "Call quietly, send the invitation later"
 msgstr "Still einberufen, Einladung später verschicken"
 
-#: forms.py:593
+#: forms.py:595
 msgid "Nobody is notified now. You can send the invitation from the assembly page."
 msgstr "Jetzt wird niemand benachrichtigt. Du kannst die Einladung später auf der Seite der Versammlung verschicken."
 
-#: forms.py:612
+#: forms.py:614
 msgid "An assembly has to start in the future."
 msgstr "Eine Versammlung muss in der Zukunft beginnen."
 
-#: models.py:42
+#: forms.py:635
+msgid "Assembly minutes as PDF"
+msgstr "Versammlungsprotokoll als PDF"
+
+#: forms.py:645
+#, python-format
+msgid "The file is too large. There are only %(quota)s available."
+msgstr "Die Datei ist zu groß. Es sind nur noch %(quota)s frei."
+
+#: minutes.py:67
+msgid "assembly-minutes"
+msgstr "Versammlungsprotokoll"
+
+#: models.py:43
 msgid "Exclude holidays"
 msgstr "Feiertage ausschließen"
 
-#: models.py:44
+#: models.py:45
 msgid "Response period in days"
 msgstr "Antwortfrist in Tagen"
 
-#: models.py:47
+#: models.py:48
 msgid "Reminder days before deadline"
 msgstr "Erinnerungen in Tagen vor Fristende"
 
-#: models.py:49
+#: models.py:50
 msgid "Weekly limit"
 msgstr "Wochenlimit"
 
-#: models.py:50
+#: models.py:51
 msgid "Keep the next day free"
 msgstr "Folgetag freihalten"
 
-#: models.py:52
+#: models.py:53
 msgid "Calculation budget in seconds"
 msgstr "Rechenbudget in Sekunden"
 
-#: models.py:54
+#: models.py:55
 msgid "Allow observers"
 msgstr "Beisitz erlauben"
 
-#: models.py:56
+#: models.py:57
 msgid "Regular people per shift with observers"
 msgstr "Reguläre Personen je Schicht mit Beisitz"
 
-#: models.py:61
+#: models.py:62
 msgid "Service reminders in days before"
 msgstr "Diensterinnerungen in Tagen vorher"
 
-#: models.py:63
+#: models.py:64
 msgid "Service reminder time"
 msgstr "Uhrzeit der Diensterinnerung"
 
-#: models.py:65
+#: models.py:66
 msgid "Assembly reminders in days before"
 msgstr "Versammlungserinnerungen in Tagen vorher"
 
-#: models.py:67
+#: models.py:68
 msgid "Assembly reminder time"
 msgstr "Uhrzeit der Versammlungserinnerung"
 
-#: models.py:82
+#: models.py:83
 msgid "Choose distinct weekdays."
 msgstr "Bitte unterschiedliche Wochentage auswählen."
 
-#: models.py:88
+#: models.py:89
 msgid "Enter distinct positive reminder offsets."
 msgstr "Bitte unterschiedliche positive Erinnerungsabstände eingeben."
 
-#: models.py:97
+#: models.py:98
 msgid "Enter distinct reminder offsets of zero or more."
 msgstr "Bitte unterschiedliche Erinnerungsabstände ab null eingeben."
 
-#: models.py:112
+#: models.py:113
 msgid "Event type"
 msgstr "Veranstaltungstyp"
 
-#: models.py:113
+#: models.py:114
 msgid "Visible for"
 msgstr "Sichtbar für"
 
-#: models.py:118
+#: models.py:119
 msgid "Responsible groups"
 msgstr "Verantwortliche Gruppen"
 
-#: models.py:121
+#: models.py:122
 msgid "Responsible persons"
 msgstr "Verantwortliche Personen"
 
-#: models.py:131
+#: models.py:132
 msgid "Label"
 msgstr "Bezeichnung"
 
-#: models.py:132
+#: models.py:133
 msgid "Meeting time"
 msgstr "Treffzeit"
 
-#: models.py:133
+#: models.py:134
 msgid "Start time"
 msgstr "Beginn"
 
-#: models.py:134
+#: models.py:135
 msgid "End time"
 msgstr "Endzeit"
 
-#: models.py:136
+#: models.py:137
 msgid "End day"
 msgstr "Endtag"
 
-#: models.py:136
+#: models.py:137
 msgid "Same day"
 msgstr "Derselbe Tag"
 
-#: models.py:136
+#: models.py:137
 msgid "Next day"
 msgstr "Folgetag"
 
-#: models.py:139
+#: models.py:140
 msgid "Minimum staffing"
 msgstr "Mindestbesetzung"
 
-#: models.py:141
+#: models.py:142
 msgid "Maximum staffing"
 msgstr "Höchstbesetzung"
 
-#: models.py:143
+#: models.py:144
 msgid "Qualifications"
 msgstr "Qualifikationen"
 
-#: models.py:166
+#: models.py:167
 msgid "Maximum staffing must be at least the positive minimum."
 msgstr "Die Höchstbesetzung muss mindestens der positiven Mindestbesetzung entsprechen."
 
-#: models.py:168
+#: models.py:169
 msgid "Choose the same or next day."
 msgstr "Bitte denselben Tag oder den Folgetag auswählen."
 
-#: models.py:170
+#: models.py:171
 msgid "Meeting time must not be after the start."
 msgstr "Die Treffzeit darf nicht nach dem Beginn liegen."
 
-#: models.py:177
+#: models.py:178
 msgid "End time must be after the start."
 msgstr "Das Ende muss nach dem Beginn liegen."
 
-#: models.py:182 templates/ephios_shift_coordination/_period_status.html:4
+#: models.py:183 templates/ephios_shift_coordination/_period_status.html:4
 msgid "Preparation"
 msgstr "Vorbereitung"
 
-#: models.py:183
+#: models.py:184
 msgid "Survey open"
 msgstr "Umfrage offen"
 
-#: models.py:184 templates/ephios_shift_coordination/_period_status.html:10
+#: models.py:185 templates/ephios_shift_coordination/_period_status.html:10
 msgid "Planning"
 msgstr "Planung"
 
-#: models.py:185 templates/ephios_shift_coordination/_period_status.html:13
+#: models.py:186 templates/ephios_shift_coordination/_period_status.html:13
 #: templates/ephios_shift_coordination/_period_steps.html:18
 msgid "Published"
 msgstr "Veröffentlicht"
 
-#: models.py:267
+#: models.py:268
 msgid "Personal maximum"
 msgstr "Persönliche Höchstzahl"
 
-#: models.py:268 templates/ephios_shift_coordination/plan.html:47
+#: models.py:269 templates/ephios_shift_coordination/plan.html:47
 msgid "Notes"
 msgstr "Hinweise"
 
-#: models.py:284
+#: models.py:285
 msgid "Unavailable"
 msgstr "Nicht verfügbar"
 
-#: models.py:285
+#: models.py:286
 msgid "If needed"
 msgstr "Falls nötig"
 
-#: models.py:286
+#: models.py:287
 msgid "Available"
 msgstr "Verfügbar"
 
-#: models.py:287
+#: models.py:288
 msgid "Preferred"
 msgstr "Besonders gern"
+
+#: models.py:410
+msgid "File"
+msgstr "Datei"
 
 #: notifications.py:54
 msgid "Invitation to an availability survey for a service plan"
@@ -1015,25 +1032,31 @@ msgstr "Alle Schichten eines neuen Intervalls müssen in der Zukunft beginnen."
 msgid "Surveys"
 msgstr "Umfragen"
 
-#: signals.py:43 templates/ephios_shift_coordination/assembly_form.html:10
+#: signals.py:43 templates/ephios_shift_coordination/assembly_info.html:28
+#: templates/ephios_shift_coordination/minutes_list.html:4
+#: templates/ephios_shift_coordination/minutes_list.html:9
+msgid "Assembly minutes"
+msgstr "Versammlungsprotokolle"
+
+#: signals.py:50 templates/ephios_shift_coordination/assembly_form.html:10
 #: templates/ephios_shift_coordination/assembly_list.html:4
 #: templates/ephios_shift_coordination/assembly_list.html:11
 msgid "Assemblies"
 msgstr "Versammlungen"
 
-#: signals.py:63 templates/ephios_shift_coordination/settings.html:6
+#: signals.py:70 templates/ephios_shift_coordination/settings.html:6
 msgid "Planning settings"
 msgstr "Planungseinstellungen"
 
-#: signals.py:64 templates/ephios_shift_coordination/template_list.html:8
+#: signals.py:71 templates/ephios_shift_coordination/template_list.html:8
 msgid "Service templates"
 msgstr "Dienstvorlagen"
 
-#: signals.py:75
+#: signals.py:82
 msgid "Manage shift planning"
 msgstr "Dienstplanung verwalten"
 
-#: signals.py:78
+#: signals.py:85
 msgid "Administrators assign this permission in Planning settings. Native event creation and group publishing rights are also required."
 msgstr "Administratoren vergeben dieses Recht in den Planungseinstellungen. Die ephios-Rechte zur Veranstaltungsanlage und Gruppenveröffentlichung sind zusätzlich erforderlich."
 
@@ -1184,39 +1207,56 @@ msgstr "Einladung verschickt am %(sent)s"
 msgid "Nobody has been invited yet"
 msgstr "Bisher wurde niemand eingeladen"
 
-#: templates/ephios_shift_coordination/assembly_info.html:31
+#: templates/ephios_shift_coordination/assembly_info.html:36
+#, python-format
+msgid "filed on %(moment)s"
+msgstr "abgelegt am %(moment)s"
+
+#: templates/ephios_shift_coordination/assembly_info.html:43
+msgid "Delete"
+msgstr "Löschen"
+
+#: templates/ephios_shift_coordination/assembly_info.html:58
+msgid "File the assembly minutes as PDF"
+msgstr "Versammlungsprotokoll als PDF ablegen"
+
+#: templates/ephios_shift_coordination/assembly_info.html:62
+msgid "File minutes"
+msgstr "Protokoll ablegen"
+
+#: templates/ephios_shift_coordination/assembly_info.html:68
 msgid "Reminders sent:"
 msgstr "Erinnerungen verschickt:"
 
-#: templates/ephios_shift_coordination/assembly_info.html:36
+#: templates/ephios_shift_coordination/assembly_info.html:73
 msgid "No reminder has been sent yet."
 msgstr "Bisher wurde keine Erinnerung verschickt."
 
-#: templates/ephios_shift_coordination/assembly_info.html:39
+#: templates/ephios_shift_coordination/assembly_info.html:76
 #, python-format
 msgid "Next reminder: %(moment)s."
 msgstr "Nächste Erinnerung: %(moment)s."
 
-#: templates/ephios_shift_coordination/assembly_info.html:41
+#: templates/ephios_shift_coordination/assembly_info.html:78
 msgid "No further reminder is planned."
 msgstr "Es ist keine weitere Erinnerung geplant."
 
-#: templates/ephios_shift_coordination/assembly_info.html:46
+#: templates/ephios_shift_coordination/assembly_info.html:83
 #, python-format
 msgid "Invite 1 person"
 msgid_plural "Invite %(counter)s people"
 msgstr[0] "1 Person einladen"
 msgstr[1] "%(counter)s Personen einladen"
 
-#: templates/ephios_shift_coordination/assembly_info.html:50
+#: templates/ephios_shift_coordination/assembly_info.html:87
 msgid "Everybody who may see this assembly gets a mail with the agenda and a link to answer. You can send it again later, for example after the agenda changed."
 msgstr "Alle, die diese Versammlung sehen dürfen, bekommen eine Mail mit der Tagesordnung und einem Link zum Antworten. Du kannst sie später erneut verschicken, zum Beispiel nach einer Änderung der Tagesordnung."
 
-#: templates/ephios_shift_coordination/assembly_info.html:61
+#: templates/ephios_shift_coordination/assembly_info.html:98
 msgid "Send the invitation again"
 msgstr "Einladung erneut verschicken"
 
-#: templates/ephios_shift_coordination/assembly_info.html:63
+#: templates/ephios_shift_coordination/assembly_info.html:100
 msgid "Send the invitation now"
 msgstr "Einladung jetzt verschicken"
 
@@ -1236,7 +1276,7 @@ msgstr "Es ist keine Versammlung geplant."
 msgid "Past assemblies"
 msgstr "Vergangene Versammlungen"
 
-#: templates/ephios_shift_coordination/assembly_respond.html:27 views.py:426
+#: templates/ephios_shift_coordination/assembly_respond.html:27 views.py:429
 msgid "Thank you, your answer has been saved."
 msgstr "Danke, deine Antwort wurde gespeichert."
 
@@ -1296,6 +1336,32 @@ msgstr "Deine Antwort"
 #: templates/ephios_shift_coordination/replacement.html:9
 msgid "Staffing and replacements"
 msgstr "Besetzung und Nachbesetzung"
+
+#: templates/ephios_shift_coordination/minutes_list.html:11
+msgid "The minutes of every assembly you may see. Search by title, kind of assembly, date or a word from the agenda."
+msgstr "Die Protokolle aller Versammlungen, die du sehen darfst. Suche nach Titel, Art der Versammlung, Datum oder einem Wort aus der Tagesordnung."
+
+#: templates/ephios_shift_coordination/minutes_list.html:15
+#: templates/ephios_shift_coordination/minutes_list.html:25
+msgid "Search"
+msgstr "Suchen"
+
+#: templates/ephios_shift_coordination/minutes_list.html:21
+msgid "Search minutes"
+msgstr "Protokolle durchsuchen"
+
+#: templates/ephios_shift_coordination/minutes_list.html:41
+#, python-format
+msgid "filed by %(person)s on %(moment)s"
+msgstr "abgelegt von %(person)s am %(moment)s"
+
+#: templates/ephios_shift_coordination/minutes_list.html:47
+msgid "No minutes match this search."
+msgstr "Zu dieser Suche gibt es kein Protokoll."
+
+#: templates/ephios_shift_coordination/minutes_list.html:49
+msgid "No assembly minutes have been filed yet."
+msgstr "Bisher wurde kein Versammlungsprotokoll abgelegt."
 
 #: templates/ephios_shift_coordination/period_detail.html:19
 msgid "services"
@@ -2142,79 +2208,87 @@ msgstr "noch keine Schichten"
 msgid "No service template yet. Create one before planning a period."
 msgstr "Noch keine Dienstvorlage vorhanden. Lege eine an, bevor du ein Intervall planst."
 
-#: views.py:107 views.py:111
+#: views.py:110 views.py:114
 msgid "Invalid draft request."
 msgstr "Ungültige Entwurfsanfrage."
 
-#: views.py:137 views.py:140
+#: views.py:140 views.py:143
 msgid "Invalid proposal request."
 msgstr "Ungültige Anfrage für einen Vorschlag."
 
-#: views.py:152
+#: views.py:155
 msgid "The planning settings have been saved."
 msgstr "Die Planungseinstellungen wurden gespeichert."
 
-#: views.py:183
+#: views.py:186
 msgid "The service template has been saved."
 msgstr "Die Dienstvorlage wurde gespeichert."
 
-#: views.py:239
+#: views.py:242
 msgid "Preview and select the dates before creating events."
 msgstr "Bitte vor der Veranstaltungserstellung die Termine prüfen und auswählen."
 
-#: views.py:251
+#: views.py:254
 #, python-brace-format
 msgid "{count} services have been created."
 msgstr "{count} Dienste wurden angelegt."
 
-#: views.py:318
+#: views.py:321
 #, python-brace-format
 msgid "Calculated for the current members: {sentence}"
 msgstr "Berechnet für die aktuellen Mitglieder: {sentence}"
 
-#: views.py:375
+#: views.py:378
 msgid "The survey is open and the invitations are on their way."
 msgstr "Die Umfrage ist geöffnet, die Einladungen sind unterwegs."
 
-#: views.py:377
+#: views.py:380
 msgid "The survey settings have been saved."
 msgstr "Die Umfrageeinstellungen wurden gespeichert."
 
-#: views.py:397
+#: views.py:400
 msgid "The survey is closed. You can finish the plan now."
 msgstr "Die Umfrage ist geschlossen. Du kannst den Dienstplan jetzt fertigstellen."
 
-#: views.py:522
+#: views.py:525
 msgid "Publication accepts only the saved draft and its confirmations."
 msgstr "Die Veröffentlichung akzeptiert nur den gespeicherten Entwurf und seine Bestätigungen."
 
-#: views.py:526
+#: views.py:529
 msgid "The plan is published and everybody staffed is informed."
 msgstr "Der Dienstplan ist veröffentlicht, alle Eingeteilten werden informiert."
 
-#: views.py:573
+#: views.py:576
 msgid "The shift has been updated. Thanks for telling us."
 msgstr "Die Schicht wurde aktualisiert. Danke für die Rückmeldung."
 
-#: views.py:581
+#: views.py:584
 msgid "The shift has been updated. Thanks for helping out."
 msgstr "Die Schicht wurde aktualisiert. Danke fürs Einspringen."
 
-#: views.py:587
+#: views.py:590
 msgid "This request was incomplete. Please try again."
 msgstr "Diese Anfrage war unvollständig. Bitte versuche es erneut."
 
-#: views.py:655
+#: views.py:658
 msgid "The assembly has been called. The invitation has been sent."
 msgstr "Die Versammlung ist einberufen. Die Einladung wurde verschickt."
 
-#: views.py:657
+#: views.py:660
 msgid "The assembly has been called. Nobody has been notified yet."
 msgstr "Die Versammlung ist einberufen. Bisher wurde niemand benachrichtigt."
 
-#: views.py:675
+#: views.py:678
 #, python-format
 msgid "The invitation has been sent to %(count)d person."
 msgid_plural "The invitation has been sent to %(count)d people."
 msgstr[0] "Die Einladung wurde an %(count)d Person verschickt."
 msgstr[1] "Die Einladung wurde an %(count)d Personen verschickt."
+
+#: views.py:741
+msgid "The assembly minutes have been filed."
+msgstr "Das Versammlungsprotokoll wurde abgelegt."
+
+#: views.py:753
+msgid "The assembly minutes have been deleted."
+msgstr "Das Versammlungsprotokoll wurde gelöscht."
