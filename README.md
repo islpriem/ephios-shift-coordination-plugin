@@ -37,7 +37,7 @@ and answered straight from the invitation mail.
 
 ## Requirements
 
-ephios 0.27.0, Python 3.14, and a PostgreSQL database. The solver needs SciPy, which the
+ephios 0.27, Python 3.14, and a PostgreSQL database. The solver needs SciPy, which the
 package installs.
 
 ## Installation

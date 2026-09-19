@@ -5,7 +5,7 @@ packages are installed and no Docker settings are changed.
 
 ## Prerequisites
 
-Git, Python 3.14, uv 0.12.8 and Docker with Compose. On Linux, Chromium's system libraries
+Git, Python 3.14, uv 0.12.8 or newer, and Docker with Compose. On Linux, Chromium's system libraries
 have to be present. CI runs on Ubuntu 24.04.
 
 Use `scripts/run` in front of development tools so they use the local environment paths.

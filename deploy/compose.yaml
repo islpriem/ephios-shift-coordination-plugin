@@ -33,7 +33,7 @@ services:
       start_period: 30s
 
   database:
-    image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+    image: postgres:16-alpine
     environment:
       POSTGRES_DB: ephios_test
       POSTGRES_USER: ephios
@@ -49,13 +49,13 @@ services:
       retries: 30
 
   cache:
-    image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
+    image: redis:7-alpine
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - ${EPHIOS_DATA_ROOT:?Set EPHIOS_DATA_ROOT}/redis:/data
 
   mail:
-    image: axllent/mailpit:v1.27@sha256:e22dce5b36f93c77082e204a3942fb6b283b7896e057458400a4c88344c3df68
+    image: axllent/mailpit:v1.27
     environment:
       MP_DATABASE: /data/mailpit.db
     volumes:
@@ -64,7 +64,7 @@ services:
       - "127.0.0.1:${EPHIOS_MAIL_PORT:-8098}:8025"
 
   proxy:
-    image: nginx:stable-alpine@sha256:dc5069ad14f19660b141b21236140b91656bf89bbc3e2417c70ae650cd66104c
+    image: nginx:stable-alpine
     ports:
       - "127.0.0.1:${EPHIOS_HTTP_PORT:-8097}:80"
     volumes:

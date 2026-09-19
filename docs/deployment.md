@@ -3,13 +3,14 @@
 ## What you install
 
 The plugin is an ordinary ephios plugin: a Python package that registers itself through the
-`ephios.plugins` entry point. It has to live in the same Python environment as ephios 0.27.0.
+`ephios.plugins` entry point. It has to live in the same Python environment as ephios, and it
+accepts every 0.27 release: patch updates of ephios need no new release here.
 
 Two ways to get there.
 
 ### Container image
 
-`ghcr.io/islpriem/ephios-shift-coordination-plugin:<version>` is the official ephios 0.27.0
+`ghcr.io/islpriem/ephios-shift-coordination-plugin:<version>` is the official ephios 0.27
 image with the plugin installed into its environment. It keeps ephios' own entrypoint, so
 migrations, static files, translations and the periodic command work unchanged. Point your
 existing ephios compose service at this image instead of `ghcr.io/ephios-dev/ephios`; every

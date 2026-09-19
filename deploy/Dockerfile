@@ -1,4 +1,4 @@
-FROM ghcr.io/ephios-dev/ephios:v0.27.0@sha256:0cebfa86ef6b95d2e2acda5837f13d353ebd795c01f8039d3253fb9b6a5aa28f
+FROM ghcr.io/ephios-dev/ephios:v0.27.0
 
 COPY *.whl /opt/shift-coordination/
 RUN python - <<'PY'
@@ -15,4 +15,4 @@ for old, new in (
 path.write_text(text)
 PY
 RUN uv add /opt/shift-coordination/*.whl \
-    && uv run python -c 'from importlib.metadata import version; assert version("ephios") == "0.27.0"; assert version("ephios-shift-coordination-plugin") == "0.1.0"'
+    && uv run python -c 'from importlib.metadata import version; assert version("ephios").startswith("0.27."), version("ephios"); version("ephios-shift-coordination-plugin")'

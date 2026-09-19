@@ -32,9 +32,12 @@ docker build .local/build  # the same image the workflow builds
 
 ## Versioning
 
-[Semantic versioning](https://semver.org). Note the ephios version this release is built and
-tested against: the dependency is pinned exactly, so a new ephios needs a new release here.
-Record what changed in [CHANGELOG.md](../CHANGELOG.md) in the same commit as the version bump.
+[Semantic versioning](https://semver.org). Note the ephios versions a release is built and
+tested against in [CHANGELOG.md](../CHANGELOG.md), in the same commit as the version bump.
+
+The published package accepts a range of ephios and SciPy versions, so patch updates of either
+need no release here. `uv.lock` pins the exact versions development and CI run against, which
+is what a lock file is for: the range says what works, the lock says what was tested.
 
 ## Publishing to PyPI
 

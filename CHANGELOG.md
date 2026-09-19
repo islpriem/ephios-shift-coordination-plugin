@@ -1,11 +1,11 @@
 # Changelog
 
 This project follows [semantic versioning](https://semver.org). Every entry names the ephios
-version it was built and tested against.
+versions it was built and tested against.
 
-## 0.1.0 — unreleased
+## 1.0.0 — 19 September 2026
 
-First release, for ephios 0.27.0.
+First release, for ephios 0.27.
 
 - Planning periods from a service template, with holiday handling and a calendar selection.
 - Availability surveys with per-shift ratings, a personal maximum, private notes, invitations,

@@ -3,6 +3,7 @@ import hashlib
 import os
 import shutil
 import subprocess
+import tomllib
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -36,9 +37,18 @@ def compose(*args, **kwargs):
     )
 
 
+def declared_version():
+    """What this checkout says it is, so a version bump needs no second place to change."""
+    return tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
+
+
 def build():
+    # Both directories are emptied first: a wheel left over from an earlier version would
+    # otherwise travel into the image context and into the release artefacts.
+    shutil.rmtree(ROOT / "dist", ignore_errors=True)
     run("uv", "build", "--wheel", "--sdist")
     context = ROOT / ".local/build"
+    shutil.rmtree(context, ignore_errors=True)
     context.mkdir(parents=True, exist_ok=True)
     allowed = {"Dockerfile"}
     for wheel in (ROOT / "dist").glob("ephios_shift_coordination_plugin-*.whl"):
@@ -160,7 +170,7 @@ def run_e2e():
             "shell",
             "-c",
             "from importlib.metadata import version; "
-            "assert version('ephios-shift-coordination-plugin') == '0.1.0'; "
+            f"assert version('ephios-shift-coordination-plugin') == '{declared_version()}'; "
             "from ephios.core.plugins import get_enabled_plugins; "
             "assert any(p.module == 'ephios_shift_coordination' for p in get_enabled_plugins())",
         )

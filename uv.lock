@@ -843,7 +843,7 @@ wheels = [
 
 [[package]]
 name = "ephios-shift-coordination-plugin"
-version = "0.1.0"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "ephios" },
@@ -864,9 +864,9 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "ephios", specifier = "==0.27.0" },
+    { name = "ephios", specifier = ">=0.27,<0.28" },
     { name = "holidays", specifier = ">=0.80,<1" },
-    { name = "scipy", specifier = "==1.17.1" },
+    { name = "scipy", specifier = ">=1.17,<2" },
 ]
 
 [package.metadata.requires-dev]

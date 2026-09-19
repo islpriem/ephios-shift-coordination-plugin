@@ -23,7 +23,7 @@ jobs:
       version: ${{ steps.read.outputs.version }}
       release: ${{ steps.read.outputs.release }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - id: read
@@ -55,7 +55,7 @@ jobs:
     env:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@v4
       - name: Build the wheel, the source archive and the image context
         run: |
           mkdir -p .local/bin .cache/uv-download
