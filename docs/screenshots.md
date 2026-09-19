@@ -21,24 +21,28 @@ survey early takes one confirmation.
 ## Plan
 
 The whole period on one page, only the weekdays that carry shifts, everybody's remaining
-capacity in the sidebar. **Vorschlag berechnen** fills as many shifts as the rules allow, the
-counters update as you edit, and a speech bubble marks everybody who wrote a note.
+capacity in the sidebar. **Calculate proposal** fills as many shifts as the rules allow and
+marks how each person rated the shift they got: preferred, available, if needed, or sitting in.
+What nobody can cover stays visibly empty.
 
 ![The planning view with a calculated proposal](images/planning.png)
 
 ## Check and publish
 
 Publication takes the saved shared draft and nothing else. It creates confirmed ephios
-participations and sends one summary per person.
+participations and sends one summary per person; shifts below their minimum have to be
+confirmed first.
 
 ![The publication check](images/publication.png)
 
 ## Staff and replace
 
 After publication every service shows who answered they are available that day, whether they
-could take the shift and what speaks against it. Members sign off or step in from the service
-page itself.
+could take the shift and what speaks against it.
 
 ![The replacement overview](images/replacement.png)
 
-<img src="images/service-phone.png" alt="A published service on a phone" width="360">
+Members do not need that page for the usual case: the service itself carries their own state
+and the way out of it.
+
+![A published service with its shift coordination panel](images/service.png)
