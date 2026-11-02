@@ -1,6 +1,6 @@
 [project]
 name = "ephios-shift-coordination-plugin"
-version = "1.0.0"
+version = "1.0.1"
 description = "Availability surveys and service planning for ephios"
 authors = [{ name = "Felix Triebel", email = "felix@triebel.me" }]
 readme = "README.md"

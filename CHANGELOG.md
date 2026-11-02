@@ -3,7 +3,7 @@
 This project follows [semantic versioning](https://semver.org). Every entry names the ephios
 versions it was built and tested against.
 
-## Unreleased
+## 1.0.1 — 2 November 2026
 
 For ephios 0.27.
 
