@@ -3,6 +3,22 @@
 This project follows [semantic versioning](https://semver.org). Every entry names the ephios
 versions it was built and tested against.
 
+## Unreleased
+
+For ephios 0.27.
+
+- Allow concurrent regular duty and sitting in on sibling shifts of the same event in
+  proposals, validation, publication and later self-service staffing.
+- Exclude red survey answers from both automatic roles, even with an observer offer or
+  an own regular duty at that event.
+- Include existing observer participations in future planning, stale-data checks and
+  publication locks, respecting event types and individual participation times.
+- Correct replacement suggestions and displayed personal loads for concurrent roles.
+- Allow changing qualified candidates between regular duty and sitting in in the manual
+  planner; keep unsaved role changes protected and show the proposal's optimality status.
+- Add exhaustive role comparisons, publication, concurrency, browser and load regressions;
+  document the algorithm and its limits in [Scheduling](docs/scheduling.md).
+
 ## 1.0.0 — 19 September 2026
 
 First release, for ephios 0.27.

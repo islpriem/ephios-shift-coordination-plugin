@@ -12,7 +12,7 @@ import numpy as np
 from scipy.optimize import Bounds, LinearConstraint, milp
 from scipy.sparse import csc_array
 
-from .scheduling import PlanningInput, validate, week_start
+from .scheduling import PlanningInput, service_key, shared_event, validate, week_start
 
 # "sitting" counts people sitting in: a shift is better served by regular staff, so the
 # stage only exists when sitting in is possible and plans without it keep the old model.
@@ -82,6 +82,7 @@ def validate_input(data):
         or not integer(rules.solver_seconds, 1)
         or not integer(rules.minimum_regular, 1)
         or type(rules.free_next_day) is not bool
+        or type(rules.allow_observers) is not bool
     ):
         raise ValueError("period_or_rules")
     try:
@@ -111,6 +112,7 @@ def validate_input(data):
             or entry.start >= entry.end
             or type(entry.local_date) is not date
             or entry.local_date != entry.start.astimezone(zone).date()
+            or (entry.event_id is not None and not integer(entry.event_id, 1))
         ):
             raise ValueError("times")
     for s in data.shifts:
@@ -123,7 +125,8 @@ def validate_input(data):
         ):
             raise ValueError("shift")
     if len({c.id for c in data.commitments}) != len(data.commitments) or any(
-        not integer(c.person_id, 1) or c.person_id not in people for c in data.commitments
+        not integer(c.person_id, 1) or c.person_id not in people or type(c.observer) is not bool
+        for c in data.commitments
     ):
         raise ValueError("commitment")
     seen = set()
@@ -156,6 +159,8 @@ def validate_input(data):
 
 def validate_proposal(data, assignments, observers=()):
     """Check business rules and exactly-minimum-or-zero, independently of MILP rows."""
+    if observers and not data.rules.allow_observers:
+        raise ValueError("observers_disabled")
     result = validate(data, assignments, observers)
     counts = Counter(sid for _uid, sid in (*assignments, *observers))
     if result.violations or any(counts[s.id] not in (0, s.minimum) for s in data.shifts):
@@ -178,7 +183,9 @@ def score_plan(data, assignments, observers=()):
     )
 
 
-def conflict(first, second, free_next_day):
+def conflict(first, second, free_next_day, first_observer=False, second_observer=False):
+    if (first_observer or second_observer) and shared_event(first, second):
+        return False
     return (first.start < second.end and second.start < first.end) or (
         free_next_day and abs((first.local_date - second.local_date).days) == 1
     )
@@ -213,33 +220,34 @@ def build_model(data, deadline):
     personal, weekly = {}, {}
     for p in data.people:
         check_time(deadline)
+        serving = {service_key(c) for c in baseline[p.id] if not c.observer}
+        load = [c for c in baseline[p.id] if not c.observer or service_key(c) not in serving]
         personal[p.id] = max(
             0,
             (p.maximum or 0)
-            - sum(
-                data.period.start_date <= c.local_date <= data.period.end_date
-                for c in baseline[p.id]
-            ),
+            - sum(data.period.start_date <= c.local_date <= data.period.end_date for c in load),
         )
         for week in {week_start(s.local_date) for s in data.shifts}:
             weekly[p.id, week] = max(
                 0,
-                data.rules.weekly_limit
-                - sum(week_start(c.local_date) == week for c in baseline[p.id]),
+                data.rules.weekly_limit - sum(week_start(c.local_date) == week for c in load),
             )
 
     committed = {
-        (c.person_id, c.local_date)
+        (c.person_id, service_key(c))
         for c in data.commitments
-        if c.event_type_id == data.period.event_type_id
+        if c.event_type_id == data.period.event_type_id and not c.observer
     }
 
-    def has_capacity(person, shift, free=False):
-        # A free entry needs no capacity: the person is on site for that day anyway.
+    def has_capacity(person, shift, free=False, observer=False):
+        # Sitting in beside an own regular duty at that event needs no extra capacity.
         return (
             person.complete
             and (free or (personal[person.id] and weekly[person.id, week_start(shift.local_date)]))
-            and not any(conflict(shift, c, data.rules.free_next_day) for c in baseline[person.id])
+            and not any(
+                conflict(shift, c, data.rules.free_next_day, observer, c.observer)
+                for c in baseline[person.id]
+            )
         )
 
     candidates = []
@@ -255,25 +263,33 @@ def build_model(data, deadline):
     pairs = tuple(sorted(candidates))
     ratings = {(a.person_id, a.shift_id): a.rating for a in data.availability}
     # Sitting in is offered where somebody asked for it and on every service the person
-    # could serve anyway: staying for the neighbouring shift needs no separate offer.
+    # could serve anyway: sibling shifts need no separate offer.
     watching = set()
     if data.rules.allow_observers:
         possible = {
             (uid, other.id)
             for uid, sid in pairs
             for other in data.shifts
-            if other.local_date == shifts[sid].local_date and other.id != sid
+            if service_key(other) == service_key(shifts[sid]) and other.id != sid
+        }
+        possible |= {
+            (uid, shift.id)
+            for uid, key in committed
+            for shift in data.shifts
+            if service_key(shift) == key
         }
         for uid, sid in sorted(possible | {(o.person_id, o.shift_id) for o in data.observers}):
             check_time(deadline)
-            free = (uid, shifts[sid].local_date) in committed
-            if ratings.get((uid, sid)) != "unavailable" and has_capacity(
-                people[uid], shifts[sid], free
-            ):
+            if ratings.get((uid, sid)) == "unavailable":
+                continue
+            free = (uid, sid) in possible
+            if has_capacity(people[uid], shifts[sid], free, observer=True):
                 watching.add((uid, sid))
     observers = tuple(sorted(watching))
-    # Sitting in beside an existing commitment of that day is free and needs no offer.
-    free_pairs = {pair for pair in observers if (pair[0], shifts[pair[1]].local_date) in committed}
+    # Sitting in beside an existing regular commitment at that event needs no offer.
+    free_pairs = {
+        pair for pair in observers if (pair[0], service_key(shifts[pair[1]])) in committed
+    }
     wished = {(o.person_id, o.shift_id) for o in data.observers} | free_pairs
     targets = tuple(sorted(shifts))
     filled_offset = len(pairs)
@@ -290,16 +306,16 @@ def build_model(data, deadline):
             by_week[uid, week_start(shifts[sid].local_date)].append(column)
             by_pair[uid, sid].append(column)
             if not sitting:
-                served[uid, shifts[sid].local_date].append((sid, column))
+                served[uid, service_key(shifts[sid])].append((sid, column))
     # Columns that never cost capacity: sitting in beside an existing commitment, and every
-    # column that may only be used together with an own service of that day anyway.
+    # column that may only be used together with an own regular duty at that event.
     free_columns = {observer_index[pair] for pair in free_pairs}
     free_columns |= {observer_index[pair] for pair in observers if pair not in wished}
     # A credit column is only needed where an offered shift may be taken either way: it
-    # cancels the load again when the person serves that day.
+    # cancels the load again when the person serves that event.
     credits, credit = [], {}
     for uid, sid in observers:
-        others = [c for other, c in served[uid, shifts[sid].local_date] if other != sid]
+        others = [c for other, c in served[uid, service_key(shifts[sid])] if other != sid]
         if others and observer_index[uid, sid] not in free_columns:
             credit[uid, sid] = (double_offset + len(credits), others)
             credits.append((uid, sid))
@@ -318,7 +334,7 @@ def build_model(data, deadline):
         row([(j, 1) for j in by_shift[sid]] + [(filled_offset + i, -shifts[sid].minimum)], 0, 0)
 
     # Free columns carry no load at all; credited ones are subtracted again when they fall
-    # on a day the person serves anyway.
+    # at an event the person serves anyway.
     def load(entries, uid, week=None):
         terms = [(column, 1) for column in entries if column not in free_columns]
         return terms + [
@@ -335,21 +351,18 @@ def build_model(data, deadline):
     for first, second in combinations(targets, 2):
         check_time(deadline)
         if conflict(shifts[first], shifts[second], data.rules.free_next_day):
-            overlap = (
-                shifts[first].start < shifts[second].end
-                and shifts[second].start < shifts[first].end
-            )
-            conflicts.append((first, second, overlap))
-
-    def sides(uid, sid, overlap):
-        # A free column always accompanies a service of its own day, and that service already
-        # carries the neighbouring-day rule. Only real time overlaps need their own row.
-        return [i for i in by_pair[uid, sid] if overlap or i not in free_columns]
+            conflicts.append((first, second))
 
     for uid in by_person:
         check_time(deadline)
-        for first, second, overlap in conflicts:
-            left, right = sides(uid, first, overlap), sides(uid, second, overlap)
+        for first, second in conflicts:
+            if shared_event(shifts[first], shifts[second]):
+                left = [regular_index[uid, first]] if (uid, first) in regular_index else []
+                right = [regular_index[uid, second]] if (uid, second) in regular_index else []
+                if left and right:
+                    row([(i, 1) for i in left + right], -np.inf, 1)
+                continue
+            left, right = by_pair[uid, first], by_pair[uid, second]
             if left and right:
                 row([(i, 1) for i in left + right], -np.inf, 1)
     watched = {sid for _uid, sid in observers}
@@ -365,16 +378,16 @@ def build_model(data, deadline):
     for uid, sid in observers:
         check_time(deadline)
         column = observer_index[uid, sid]
-        others = [c for other, c in served[uid, shifts[sid].local_date] if other != sid]
+        others = [c for other, c in served[uid, service_key(shifts[sid])] if other != sid]
         if (uid, sid) in regular_index:
             row([(column, 1), (regular_index[uid, sid], 1)], -np.inf, 1)
         double = credit.get((uid, sid), (None, None))[0]
         if double is not None:
-            # The credit only applies where the person really serves that day.
+            # The credit only applies where the person really serves that event.
             row([(double, 1), (column, -1)], -np.inf, 0)
             row([(double, 1)] + [(other, -1) for other in others], -np.inf, 0)
         if (uid, sid) not in wished:
-            # Without an offer, sitting in is only possible beside an own service that day.
+            # Without an offer, sitting in requires an own regular duty at that event.
             row([(column, 1)] + [(other, -1) for other in others], -np.inf, 0)
     size = len(pairs) + len(targets) + len(observers) + len(credits)
     matrix = csc_array((np.asarray(values, dtype=float), (rows, cols)), shape=(len(lower), size))

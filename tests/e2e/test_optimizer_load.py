@@ -57,6 +57,7 @@ def test_native_load_http_budget_queries_and_responsive_preview():
                 # Read queries are measured, with a ceiling to catch accidental per-rating queries.
                 assert report["snapshot_queries"] < 4000
                 assert result["score"]["filled"] > 0
+                expect(page.get_by_text(result["message"], exact=True)).to_be_visible()
                 expect(page.locator("input[data-person]:checked")).to_have_count(0)
                 expect(
                     page.get_by_role("button", name="Diesen Vorschlag übernehmen", exact=True)

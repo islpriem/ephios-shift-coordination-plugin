@@ -14,7 +14,7 @@ def test_sitting_in_early_closing_and_self_service_replacement():
     setup = json.loads(
         in_test_app("""
 import json, uuid
-from datetime import date
+from datetime import date, time
 from ephios.core.models import EventType, UserProfile
 from ephios_shift_coordination.models import PlanningSettings, ServiceTemplate, ShiftTemplate
 from ephios_shift_coordination.services import create_period
@@ -28,6 +28,7 @@ template.responsible_groups.set(source.responsible_groups.all())
 for original in source.shifts.all():
     values = {field.name: getattr(original, field.name) for field in ShiftTemplate._meta.fields
         if field.name not in ('id', 'template')}
+    values.update(meeting_time=time(17, 45), start_time=time(18), end_time=time(22))
     shift = ShiftTemplate.objects.create(template=template, **values)
     shift.qualifications.set(original.qualifications.all())
 rules = PlanningSettings.objects.get(pk=1).snapshot()
@@ -58,7 +59,7 @@ print(json.dumps({'period': period.pk, 'service': period.events.first().pk,
             # A member offers one shift and, in addition, to sit in on the other one.
             login(member, "demo-003@example.invalid", "demo")
             member.goto(f"{base}/shift-coordination/surveys/{setup['period']}/")
-            member.get_by_label("persönliche Höchstzahl", exact=False).fill("2")
+            member.get_by_label("persönliche Höchstzahl", exact=False).fill("1")
             expect(member.get_by_label("Besonders gern", exact=False)).to_have_count(1)
             member.locator('input[value="preferred"]').first.check()
             member.get_by_label("beisitzen", exact=False).check()
@@ -85,6 +86,16 @@ print(json.dumps({'period': period.pk, 'service': period.events.first().pk,
                 for person in people:
                     card.locator(f'input[data-person="{person}"]').first.check()
             expect(coordinator.locator("input[data-person]:checked")).to_have_count(3)
+            expect(coordinator.locator(f'[data-person-count="{sitter}"]')).to_have_text("1/1")
+            # Qualified candidates must also be selectable as observers and back again.
+            card = coordinator.locator(f'[data-shift-card="{second}"]')
+            card.locator("select").select_option(str(regular))
+            card.get_by_role("button", name="Als Beisitz hinzufügen", exact=True).click()
+            expect(card.locator(f'input[data-person="{regular}"][data-observer]')).to_be_checked()
+            card.locator("select").select_option(str(regular))
+            card.get_by_role("button", name="Person hinzufügen", exact=True).click()
+            expect(card.locator(f'input[data-person="{regular}"]')).to_have_count(1)
+            expect(card.locator(f'input[data-person="{regular}"][data-observer]')).to_have_count(0)
             # One shift stays below its minimum on purpose: that is a confirmed exception now.
             expect(coordinator.locator(".sc-banner-list li")).to_have_count(1)
             expect(coordinator.locator("[data-shift-problem] .sc-problem")).to_have_count(1)
@@ -93,6 +104,25 @@ print(json.dumps({'period': period.pk, 'service': period.events.first().pk,
             expect(coordinator.locator("#draft-status")).to_have_text(
                 "Gemeinsamer Entwurf gespeichert"
             )
+            card.locator("select").select_option(str(regular))
+            card.get_by_role("button", name="Als Beisitz hinzufügen", exact=True).click()
+            coordinator.get_by_role("button", name="Vorschlag berechnen", exact=True).click()
+            expect(
+                coordinator.get_by_role("button", name="Diesen Vorschlag übernehmen")
+            ).to_be_enabled(timeout=20000)
+            dialogs = []
+
+            def keep_role_change(dialog):
+                dialogs.append(dialog.message)
+                dialog.dismiss()
+
+            coordinator.once("dialog", keep_role_change)
+            coordinator.get_by_role("button", name="Diesen Vorschlag übernehmen").click()
+            assert len(dialogs) == 1  # changing only a role is still an unsaved change
+            expect(card.locator(f'input[data-person="{regular}"][data-observer]')).to_be_checked()
+            coordinator.get_by_role("button", name="Meinen Entwurf behalten").click()
+            card.locator("select").select_option(str(regular))
+            card.get_by_role("button", name="Person hinzufügen", exact=True).click()
             before_mail = {message["ID"] for message in mail_messages()}
             coordinator.get_by_role("link", name="Prüfen und veröffentlichen").click()
             for token in coordinator.locator('[name="confirmed_tokens"]').all():
@@ -141,6 +171,16 @@ print(','.join(str(count) for count in (
             assert warnings and {
                 recipient["Address"] for message in warnings for recipient in message["To"]
             } <= {"demo-001@example.invalid", "demo-002@example.invalid"}
+            # The regular telephone duty does not block sitting in on concurrent chat.
+            with member.expect_navigation(wait_until="domcontentloaded"):
+                member.locator(f'section[data-shift="{second}"]').get_by_role(
+                    "button", name="Ich sitze bei", exact=True
+                ).click()
+            expect(member.get_by_text("Danke fürs Einspringen", exact=False)).to_be_visible()
+            with member.expect_navigation(wait_until="domcontentloaded"):
+                member.locator(f'section[data-shift="{second}"]').get_by_role(
+                    "button", name="Ich bin verhindert"
+                ).click()
             # A qualified member can take the free place without the coordination.
             helper.goto(f"{base}/shift-coordination/services/{setup['service']}/")
             expect(helper.get_by_role("button", name="Ich übernehme die Schicht")).to_have_count(0)

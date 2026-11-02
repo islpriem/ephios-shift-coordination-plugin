@@ -22,4 +22,10 @@ export class DraftState {
     assignments() { return this.pairs("regular"); }
     observers() { return this.pairs("observer"); }
     all() { return [...this.roles.keys()].map(key => key.split(":").map(Number)); }
+    load(person, shifts) {
+        const key = sid => shifts.get(sid).event_id ?? shifts.get(sid).date;
+        const regular = this.assignments().filter(([uid]) => uid === person);
+        const served = new Set(regular.map(([, sid]) => key(sid)));
+        return regular.length + this.observers().filter(([uid, sid]) => uid === person && !served.has(key(sid))).length;
+    }
 }

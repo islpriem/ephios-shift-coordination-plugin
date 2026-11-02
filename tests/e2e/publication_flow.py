@@ -60,9 +60,9 @@ print(json.dumps({{'planned': [s.pk for s in shifts], 'native': [s.shift_id for 
     expect(coordinator.locator("input[data-person]:checked")).to_have_count(2)
     card = coordinator.locator(f'[data-shift-card="{info["planned"][1]}"]')
     card.locator(".sc-candidates > summary").click()
-    card.get_by_label("Person hinzufügen, die diese Schicht nicht angeboten hat").select_option(
-        str(info["users"]["4"])
-    )
+    card.get_by_label(
+        "Person auswählen, um sie hinzuzufügen oder ihre Rolle zu ändern"
+    ).select_option(str(info["users"]["4"]))
     card.get_by_role("button", name="Person hinzufügen", exact=True).click()
     banner = coordinator.locator(".sc-banner")
     # The person is one exception; the half staffed two-person shift is the second.

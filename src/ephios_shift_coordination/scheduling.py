@@ -41,6 +41,7 @@ class Shift:
     local_date: date
     minimum: int
     maximum: int | None = None
+    event_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -74,6 +75,8 @@ class Commitment:
     start: datetime
     end: datetime
     local_date: date
+    event_id: int | None = None
+    observer: bool = False
 
 
 @dataclass(frozen=True)
@@ -112,12 +115,21 @@ def week_start(day):
     return day - timedelta(days=day.weekday())
 
 
+def service_key(entry):
+    """Known events bind their shifts together, including shifts starting after midnight."""
+    return ("event", entry.event_id) if entry.event_id is not None else ("date", entry.local_date)
+
+
+def shared_event(first, second):
+    return first.event_id is not None and first.event_id == second.event_id
+
+
 def validate(data: PlanningInput, assignments, observers=()) -> ValidationResult:
     """Validate a complete manual draft; native commitments are read-only context.
 
     Assignment pairs are (person_id, planned_shift_id). Observer pairs sit in without a
-    qualification check, but count as staff. Sitting in on a day the person already serves
-    needs no separate offer and is no extra service: the person is on site anyway.
+    qualification check, but count as staff. Sitting in at an event the person already serves
+    needs no separate offer and is no extra service, including concurrent sibling shifts.
     Integrity/access checking belongs to the adapter; unknown and duplicate pairs,
     including one person in both roles of a shift, are always rejected here.
     """
@@ -141,10 +153,10 @@ def validate(data: PlanningInput, assignments, observers=()) -> ValidationResult
     counts, underfilled = {}, []
     duty = {person.id: set() for person in data.people}
     for person_id, shift_id in pairs:
-        duty[person_id].add(shifts[shift_id].local_date)
+        duty[person_id].add(service_key(shifts[shift_id]))
     for commitment in data.commitments:
-        if commitment.event_type_id == data.period.event_type_id:
-            duty[commitment.person_id].add(commitment.local_date)
+        if commitment.event_type_id == data.period.event_type_id and not commitment.observer:
+            duty[commitment.person_id].add(service_key(commitment))
 
     def add(code, person_ids, selected, facts, baseline=False):
         target = existing if baseline else violations
@@ -172,10 +184,10 @@ def validate(data: PlanningInput, assignments, observers=()) -> ValidationResult
             "answer": asdict(answer) if answer else None,
             "observer": True,
         }
-        # Whoever already serves that day may stay for another shift without offering it.
+        # An own regular duty enables sitting in on sibling shifts without another offer.
         if not people[person_id].complete or (
             (person_id, shift_id) not in wishes
-            and shifts[shift_id].local_date not in duty[person_id]
+            and service_key(shifts[shift_id]) not in duty[person_id]
         ):
             add("observer_wish", [person_id], [shift_id], facts)
         if answer and answer.rating == "unavailable":
@@ -219,14 +231,24 @@ def validate(data: PlanningInput, assignments, observers=()) -> ValidationResult
         entries = [
             (False, c)
             for c in data.commitments
-            if c.person_id == person.id and c.event_type_id == data.period.event_type_id
+            if c.person_id == person.id
+            and c.event_type_id == data.period.event_type_id
+            and not c.observer
         ]
         entries += [(True, shifts[sid]) for uid, sid in pairs if uid == person.id]
-        watching = [(True, shifts[sid]) for uid, sid in sitting if uid == person.id]
-        # Sitting in beside an own service of that day costs no capacity, but still binds
-        # the person to the day: overlaps and neighboring days are checked for both roles.
-        served = {entry.local_date for _draft, entry in entries}
-        load = entries + [(d, e) for d, e in watching if e.local_date not in served]
+        watching = [
+            (False, c)
+            for c in data.commitments
+            if c.person_id == person.id
+            and c.event_type_id == data.period.event_type_id
+            and c.observer
+        ]
+        watching += [(True, shifts[sid]) for uid, sid in sitting if uid == person.id]
+        # Sitting in beside an own service at that event costs no capacity. Both roles
+        # still block conflicting duties at other events.
+        served = {service_key(entry) for _draft, entry in entries}
+        load = entries + [(d, e) for d, e in watching if service_key(e) not in served]
+        observer_entries = {(draft, entry.id) for draft, entry in watching}
         entries += watching
         interval = [
             (draft, entry)
@@ -265,6 +287,11 @@ def validate(data: PlanningInput, assignments, observers=()) -> ValidationResult
                 week=week,
             )
         for (first_draft, first), (second_draft, second) in combinations(entries, 2):
+            if shared_event(first, second) and (
+                (first_draft, first.id) in observer_entries
+                or (second_draft, second.id) in observer_entries
+            ):
+                continue
             selected = [
                 e.id for draft, e in ((first_draft, first), (second_draft, second)) if draft
             ]

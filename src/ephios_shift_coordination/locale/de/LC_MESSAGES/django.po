@@ -1038,8 +1038,8 @@ msgid "Default location for assemblies of this type"
 msgstr "Vorgabeort für Versammlungen dieser Art"
 
 #: proposals.py:33
-msgid "Full staffing, yellow assignments and strong preferences are optimized. Partner variety is a heuristic improvement."
-msgstr "Vollbesetzung, gelbe Zuteilungen und starke Präferenzen sind optimiert. Die Abwechslung bei Dienstpaaren wird heuristisch verbessert."
+msgid "Staffed shifts, fewer sitting-in assignments, fewer yellow assignments and strong preferences are optimized in that order. Partner variety is a heuristic improvement."
+msgstr "Besetzte Schichten, weniger Beisitze, weniger gelbe Zuteilungen und starke Präferenzen sind in dieser Reihenfolge optimiert. Die Abwechslung bei Dienstpaaren wird heuristisch verbessert."
 
 #: proposals.py:37
 msgid "The time limit was reached. This proposal follows all rules, but not all priority objectives are proven optimal."
@@ -1831,8 +1831,8 @@ msgid "Qualification missing"
 msgstr "Qualifikation fehlt"
 
 #: templates/ephios_shift_coordination/plan.html:58
-msgid "Add somebody who did not offer this shift"
-msgstr "Person hinzufügen, die diese Schicht nicht angeboten hat"
+msgid "Choose a person to add or change their role"
+msgstr "Person auswählen, um sie hinzuzufügen oder ihre Rolle zu ändern"
 
 #: templates/ephios_shift_coordination/plan.html:59
 msgid "Add person"
@@ -2197,8 +2197,8 @@ msgid "I would like to sit in"
 msgstr "Ich möchte beisitzen"
 
 #: templates/ephios_shift_coordination/survey_detail.html:121
-msgid "Sitting in means joining a service without taking a shift yourself: no qualification is required and the time is not counted as working hours."
-msgstr "Beisitzen heißt, bei einem Dienst dabei zu sein, ohne selbst eine Schicht zu übernehmen: ohne Qualifikation und ohne Anrechnung als Arbeitszeit."
+msgid "Sitting in requires no qualification and does not count as working hours. You may sit in on other shifts of the same event while taking a regular shift, even when they overlap. Red rules out both regular duty and sitting in on that shift. Without a regular duty at that event, sitting in requires your offer and counts towards your personal limit."
+msgstr "Beisitz erfordert keine Qualifikation und zählt nicht als Arbeitszeit. Bei einem eigenen regulären Dienst kannst du in anderen Schichten derselben Veranstaltung beisitzen, auch wenn sie gleichzeitig stattfinden. Rot schließt für diese Schicht sowohl regulären Dienst als auch Beisitz aus. Ohne eigenen Dienst bei dieser Veranstaltung setzt Beisitz dein Angebot voraus und zählt zu deiner persönlichen Höchstzahl."
 
 #: templates/ephios_shift_coordination/survey_detail.html:128
 msgid "Service"

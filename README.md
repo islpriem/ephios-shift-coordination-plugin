@@ -27,7 +27,8 @@ and answered straight from the invitation mail.
 - **Replacement.** After publication everybody staffed can sign off, step in, or offer to sit
   in, and sees who else answered they are available that day.
 - **Sitting in.** Joining a service without taking a shift: no qualification, no working
-  hours, but counted towards the staffing.
+  hours, but counted towards the staffing. Regular duty and sitting in on other shifts of
+  the same event can overlap. [Scheduling rules and examples](docs/scheduling.md).
 - **Assemblies.** Called from one form, invited with an agenda, answered from the mail
   without a login, with minutes filed as PDF and found again through one search.
 - **Reminders.** Before a service, before an assembly, and before the next planning period is

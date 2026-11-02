@@ -394,7 +394,10 @@ def test_publication_rechecks_actor_after_waiting_for_user_locks(draft_data, mon
 
 
 @pytest.mark.parametrize("change", ["state", "times"])
-def test_publication_locks_existing_native_scheduling_inputs(draft_data, monkeypatch, change):
+@pytest.mark.parametrize("observer", [False, True])
+def test_publication_locks_existing_native_scheduling_inputs(
+    draft_data, monkeypatch, change, observer
+):
     from datetime import timedelta
     from threading import Event as ThreadEvent
 
@@ -402,12 +405,13 @@ def test_publication_locks_existing_native_scheduling_inputs(draft_data, monkeyp
     from ephios.core.models import LocalParticipation, Shift
 
     from ephios_shift_coordination import publication
-    from tests.test_drafts import native_commitment
+    from tests.test_drafts import native_commitment, native_observer
 
     data = draft_data
-    existing = native_commitment(data)
+    existing = native_observer(data) if observer else native_commitment(data)
+    participation_model = type(existing)
     if change == "state":
-        LocalParticipation.objects.filter(pk=existing.pk).update(
+        participation_model.objects.filter(pk=existing.pk).update(
             state=LocalParticipation.States.REQUESTED
         )
     else:
@@ -442,7 +446,7 @@ def test_publication_locks_existing_native_scheduling_inputs(draft_data, monkeyp
                 with connection.cursor() as cursor:
                     cursor.execute("SET LOCAL lock_timeout = '300ms'")
                 if change == "state":
-                    LocalParticipation.objects.filter(pk=existing.pk).update(
+                    participation_model.objects.filter(pk=existing.pk).update(
                         state=LocalParticipation.States.CONFIRMED
                     )
                 else:

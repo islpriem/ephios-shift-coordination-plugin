@@ -29,8 +29,9 @@ const candidateTotals = new Map();
 const pairProblems = new Map(), shiftProblems = new Map();
 let exceptions = 0, notesOnly = false;
 let proposal = null, calculating = false;
-const signature = pairs => pairs.map(pair => pair.join(":")).sort().join(",");
-let savedSignature = signature(state.all());
+const signature = () => [state.assignments(), state.observers()]
+    .map(pairs => pairs.map(pair => pair.join(":")).sort().join(",")).join(";");
+let savedSignature = signature();
 let revision = 0, timer, saving = false, conflict = false, validated = false;
 
 function element(tag, text, parent) {
@@ -172,7 +173,7 @@ function shiftCard(shift, parent) {
     picker.className = "form-select form-select-sm";
     element("option", "—", picker).value = "";
     for (const person of data.people) {
-        if (rows.some(row => row.uid === person.id) || !answers.has(`${person.id}:${shift.id}`)) continue;
+        if (!answers.has(`${person.id}:${shift.id}`)) continue;
         element("option", personLabel(person.id, shift.id), picker).value = person.id;
     }
     const buttons = element("div", undefined, more);
@@ -180,10 +181,15 @@ function shiftCard(shift, parent) {
     const insert = observer => {
         if (!picker.value) return;
         const uid = Number(picker.value);
+        const previous = card.querySelector(`input[data-person="${uid}"]`)?.closest("label");
+        if (previous) {
+            dropTips(previous);
+            previous.remove();
+        } else {
+            candidateTotals.set(shift.id, candidateTotals.get(shift.id) + 1);
+        }
         state.toggle(uid, shift.id, true, observer);
         choice(uid, shift, chosen, list, observer);
-        candidateTotals.set(shift.id, candidateTotals.get(shift.id) + 1);
-        picker.selectedOptions[0].remove();
         picker.value = "";
         changed();
     };
@@ -238,7 +244,7 @@ function renderCalendar() {
     renderCounts();
 }
 
-function renderCounts() {
+function renderCounts(checkedCounts = null) {
     const pairs = state.all();
     for (const node of editor.querySelectorAll("[data-shift-count]")) {
         const shift = shifts.get(Number(node.dataset.shiftCount));
@@ -258,8 +264,8 @@ function renderCounts() {
     }
     for (const node of editor.querySelectorAll("[data-person-count]")) {
         const uid = Number(node.dataset.personCount);
-        const existing = data.counts[uid].existing;
-        const draft = pairs.filter(pair => pair[0] === uid).length;
+        const existing = checkedCounts?.[uid].existing ?? data.counts[uid].existing;
+        const draft = checkedCounts?.[uid].draft ?? state.load(uid, shifts);
         const maximum = people.get(uid).maximum;
         node.textContent = `${existing + draft}/${maximum ?? "—"}`;
         tip(node, `${words.draft}: ${draft} · ${words.existing}: ${existing}`);
@@ -419,7 +425,7 @@ function renderValidation(result) {
         }
     }
     applyProblems();
-    renderStats();
+    renderCounts(result.counts);
 }
 
 function payload() {
@@ -489,7 +495,7 @@ editor.addEventListener("submit", async event => {
         const result = await request(words.saveUrl, body);
         data.version = result.version;
         data.fingerprint = result.fingerprint;
-        savedSignature = signature(state.all());
+        savedSignature = signature();
         proposal = null;
         preview.hidden = true;
         status.textContent = words.saved;
@@ -541,6 +547,7 @@ calculate.addEventListener("click", async () => {
         // Sitting in is only worth a word where the period offers it at all.
         if (data.allow_observers) detail.push(format(words.proposalSitting, { sitting: score.sitting ?? 0 }));
         element("p", detail.join(" "), proposalContent).className = "text-body-secondary mb-0";
+        element("p", result.message, proposalContent).className = "mb-0";
         if (!result.assignments.length && !observers.length) {
             element("p", words.emptyProposal, proposalContent).className = "mb-0";
         }
@@ -558,7 +565,7 @@ calculate.addEventListener("click", async () => {
 
 adopt.addEventListener("click", () => {
     if (!proposal || calculating || saving || conflict) return;
-    if (signature(state.all()) !== savedSignature && !window.confirm(words.replaceDraft)) return;
+    if (signature() !== savedSignature && !window.confirm(words.replaceDraft)) return;
     state.replace(proposal.assignments, proposal.observers ?? []);
     document.getElementById("invalid-assignments").replaceChildren();
     renderCalendar();

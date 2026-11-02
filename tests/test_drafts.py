@@ -145,6 +145,50 @@ def test_native_effective_times_long_overlaps_other_types_and_private_facts(draf
     assert not validate_draft(data.coordinator, data.period.pk, **payload(data))["violations"]
 
 
+def native_observer(data, *, other_type=False):
+    from copy import copy
+    from uuid import uuid4
+
+    from ephios.core.models.events import PlaceholderParticipation
+
+    from ephios_shift_coordination.models import ObserverParticipation, PlannedEvent, PlannedShift
+
+    regular = native_commitment(data, other_type=other_type)
+    native = regular.shift
+    regular.delete()
+    other_period = copy(data.period)
+    other_period.pk = None
+    other_period.creation_key = uuid4()
+    other_period.save()
+    link = PlannedEvent.objects.create(
+        period=other_period,
+        date=data.period.start_date,
+        event=native.event,
+        original_event_id=native.event_id,
+    )
+    planned = PlannedShift.objects.create(
+        event=link, shift=native, original_shift_id=native.pk, snapshot={}
+    )
+    participation = PlaceholderParticipation.objects.create(
+        shift=native, display_name="Sitting in", state=LocalParticipation.States.CONFIRMED
+    )
+    ObserverParticipation.objects.create(
+        participation=participation, planned_shift=planned, user=data.member
+    )
+    return participation
+
+
+def test_existing_observers_are_included_in_conflicts_and_stale_draft_detection(draft_data):
+    data = draft_data
+    initial = payload(data)
+    native_observer(data)
+    updated = payload(data)
+    assert updated["fingerprint"] != initial["fingerprint"]
+    result = validate_draft(data.coordinator, data.period.pk, **updated)
+    assert "overlap" in {v["code"] for v in result["violations"]}
+    assert result["counts"][data.member.pk]["existing"] == 1
+
+
 @pytest.mark.parametrize(
     "mutation", ["inactive", "access", "coordinator", "disabled", "structure", "native"]
 )

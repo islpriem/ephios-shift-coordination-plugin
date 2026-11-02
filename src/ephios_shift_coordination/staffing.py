@@ -17,6 +17,7 @@ from guardian.shortcuts import get_users_with_perms
 
 from . import scheduling as rules
 from .access import can_plan, enabled
+from .commitments import observer_commitments
 from .drafts import RULE_LABELS
 from .ephios_integration import eligible, observer_name
 from .models import (
@@ -87,26 +88,25 @@ def staffing(planned_shift):
     }
 
 
-def conflicting(user, planned_shift):
-    """True when the member is already confirmed elsewhere at that time, in any role."""
+def conflicting(user, planned_shift, *, observer=False):
+    """Parallel roles are allowed within one event if at least one role is sitting in."""
     shift = planned_shift.shift
     overlapping = Q(start_time__lt=shift.end_time, end_time__gt=shift.start_time)
-    if (
-        LocalParticipation.objects.filter(
-            user=user, state=CONFIRMED, shift__event__type_id=shift.event.type_id
-        )
-        .exclude(shift_id=shift.pk)
-        .filter(overlapping)
-        .exists()
-    ):
+    regular = LocalParticipation.objects.filter(
+        user=user, state=CONFIRMED, shift__event__type_id=shift.event.type_id
+    )
+    if observer:
+        regular = regular.exclude(shift__event_id=shift.event_id)
+    if regular.exclude(shift_id=shift.pk).filter(overlapping).exists():
         return True
     return (
-        ObserverParticipation.objects.filter(user=user, participation__state=CONFIRMED)
-        .exclude(planned_shift=planned_shift)
-        .filter(
-            planned_shift__shift__start_time__lt=shift.end_time,
-            planned_shift__shift__end_time__gt=shift.start_time,
+        PlaceholderParticipation.objects.filter(
+            planning_observer__user=user,
+            state=CONFIRMED,
+            shift__event__type_id=shift.event.type_id,
         )
+        .exclude(shift__event_id=shift.event_id)
+        .filter(overlapping)
         .exists()
     )
 
@@ -117,17 +117,18 @@ def options(user, planned_shift):
     period = planned_shift.event.period
     mine = next((row for row in state["rows"] if row["user"] == user), None)
     upcoming = planned_shift.shift.start_time > timezone.now()
-    free = upcoming and not state["full"] and mine is None and not conflicting(user, planned_shift)
+    free = upcoming and not state["full"] and mine is None
     return {
         **state,
         "mine": mine,
         "can_leave": bool(mine) and upcoming,
-        "can_join": free and eligible(user, planned_shift),
+        "can_join": free and eligible(user, planned_shift) and not conflicting(user, planned_shift),
         "can_observe": (
             free
             and bool(period.rules.get("allow_observers"))
             and user.is_active
             and user.has_perm("core.view_event", planned_shift.shift.event)
+            and not conflicting(user, planned_shift, observer=True)
         ),
     }
 
@@ -201,6 +202,7 @@ def day_input(planned_event, shifts, people):
             planned.shift.start_time.astimezone(zone).date(),
             planned.shift.structure_configuration["minimum_number_of_participants"],
             planned.shift.structure_configuration["maximum_number_of_participants"],
+            event_id=planned.shift.event_id,
         )
         for planned in shifts
     )
@@ -216,6 +218,7 @@ def day_input(planned_event, shifts, people):
             row["start_time"],
             row["end_time"],
             row["start_time"].astimezone(zone).date(),
+            event_id=row["shift__event_id"],
         )
         for row in LocalParticipation.objects.filter(
             user__in=people,
@@ -232,8 +235,18 @@ def day_input(planned_event, shifts, people):
                 end_time__gt=min(s.start for s in pure_shifts),
             )
         )
-        .exclude(shift_id__in=[planned.shift_id for planned in shifts])
-        .values("pk", "user_id", "shift__event__type_id", "start_time", "end_time")
+        .values(
+            "pk", "user_id", "shift__event_id", "shift__event__type_id", "start_time", "end_time"
+        )
+    )
+    commitments += observer_commitments(
+        [person.pk for person in people],
+        period.template_snapshot["event_type"],
+        datetime.combine(first, time.min, zone),
+        datetime.combine(last, time.min, zone),
+        min(s.start for s in pure_shifts),
+        max(s.end for s in pure_shifts),
+        zone,
     )
     return rules.PlanningInput(
         rules.Period(
@@ -249,6 +262,7 @@ def day_input(planned_event, shifts, people):
                 for key in ("weekly_limit", "free_next_day", "solver_seconds")
             },
             minimum_regular=period.rules.get("minimum_regular", 1),
+            allow_observers=bool(period.rules.get("allow_observers")),
         ),
         pure_shifts,
         tuple(entries),
@@ -282,6 +296,12 @@ def replacements(planned_event, coordinator):
     data = day_input(planned_event, shifts, candidates)
     wishes = {(o.person_id, o.shift_id) for o in data.observers}
     ratings = {(a.person_id, a.shift_id): a for a in data.availability}
+    serving = {
+        row["user"].pk
+        for planned in shifts
+        for row in members(planned)
+        if row["user"] and not row["observer"]
+    }
     result = []
     for planned in shifts:
         state = staffing(planned)
@@ -291,14 +311,18 @@ def replacements(planned_event, coordinator):
             if user in taken:
                 continue
             answer = ratings[user.pk, planned.pk]
-            observing = (user.pk, planned.pk) in wishes
-            # Somebody who offered to sit in on the service may still have ruled out this
-            # very shift; that answer counts and keeps them out of the list.
             if answer.rating == "unavailable":
                 continue
+            observing = bool(period.rules.get("allow_observers")) and (
+                (user.pk, planned.pk) in wishes or user.pk in serving
+            )
             if answer.rating not in positive and not observing:
                 continue
             regular = answer.eligible and answer.rating in positive
+            regular_blocked = conflicting(user, planned)
+            observer_blocked = conflicting(user, planned, observer=True)
+            if regular_blocked and observing and not observer_blocked:
+                regular = False
             if not regular and not observing:
                 continue
             checks = rules.validate(
@@ -317,7 +341,7 @@ def replacements(planned_event, coordinator):
                     else "",
                     "regular": regular,
                     "observer": observing and not regular,
-                    "blocked": "overlap" in codes,
+                    "blocked": regular_blocked if regular else observer_blocked,
                     "warnings": [str(RULE_LABELS[code]) for code in dict.fromkeys(codes)],
                 }
             )
@@ -373,7 +397,7 @@ def add_person(actor, planned_shift_id, *, user_id, observer=False):
         raise Conflict(_("This person is already staffed for that shift."))
     if state["full"]:
         raise ValidationError(_("This shift is already fully staffed."))
-    if conflicting(target, planned):
+    if conflicting(target, planned, observer=observer):
         raise ValidationError(_("This person is already assigned to another service at that time."))
     if observer:
         if not planned.event.period.rules.get("allow_observers"):

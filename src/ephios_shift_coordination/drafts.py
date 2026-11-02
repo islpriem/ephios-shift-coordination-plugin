@@ -21,11 +21,13 @@ from ephios.core.models import (
     Shift,
     UserProfile,
 )
+from ephios.core.models.events import PlaceholderParticipation
 from ephios.core.services.qualification import collect_all_included_qualifications
 from guardian.shortcuts import get_objects_for_user
 
 from . import scheduling as rules
 from .access import can_plan, enabled
+from .commitments import observer_commitments
 from .ephios_integration import check_structure
 from .models import Availability, DraftAssignment, PlanningPeriod, RuleOverride
 from .services import Conflict
@@ -89,6 +91,14 @@ def snapshot(user, period_id, *, lock=False):
         list(
             LocalParticipation.objects.filter(
                 user_id__in=[person.pk for person in users],
+                shift__event__type_id=period.template_snapshot["event_type"],
+            )
+            .order_by("pk")
+            .select_for_update()
+        )
+        list(
+            PlaceholderParticipation.objects.filter(
+                planning_observer__user_id__in=[person.pk for person in users],
                 shift__event__type_id=period.template_snapshot["event_type"],
             )
             .order_by("pk")
@@ -193,6 +203,7 @@ def snapshot(user, period_id, *, lock=False):
             link.shift.start_time.astimezone(zone).date(),
             link.shift.structure_configuration["minimum_number_of_participants"],
             link.shift.structure_configuration["maximum_number_of_participants"],
+            event_id=link.shift.event_id,
         )
         for link in planned
     )
@@ -212,6 +223,7 @@ def snapshot(user, period_id, *, lock=False):
             row["start_time"],
             row["end_time"],
             row["start_time"].astimezone(zone).date(),
+            event_id=row["shift__event_id"],
         )
         for row in LocalParticipation.objects.filter(
             user_id__in=[p.id for p in people],
@@ -225,7 +237,18 @@ def snapshot(user, period_id, *, lock=False):
             )
         )
         .order_by("pk")
-        .values("pk", "user_id", "shift__event__type_id", "start_time", "end_time")
+        .values(
+            "pk", "user_id", "shift__event_id", "shift__event__type_id", "start_time", "end_time"
+        )
+    )
+    commitments += observer_commitments(
+        [person.id for person in people],
+        period.template_snapshot["event_type"],
+        lower,
+        upper,
+        min(s.start for s in shifts),
+        max(s.end for s in shifts),
+        zone,
     )
     data = rules.PlanningInput(
         rules.Period(
@@ -261,6 +284,7 @@ def snapshot(user, period_id, *, lock=False):
         [
             {
                 "id": link.pk,
+                "event_id": link.shift.event_id,
                 "label": link.shift.label,
                 "start": link.shift.start_time.astimezone(zone).isoformat(),
                 "end": link.shift.end_time.astimezone(zone).isoformat(),

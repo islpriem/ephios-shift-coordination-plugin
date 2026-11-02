@@ -66,9 +66,9 @@ def load_fixture(period_id=None, scarce=False):
                 template=template,
                 position=index,
                 label=f"Load shift {index + 1}",
-                meeting_time=time(8 + 3 * index),
-                start_time=time(8 + 3 * index),
-                end_time=time(11 + 3 * index),
+                meeting_time=time(8),
+                start_time=time(8),
+                end_time=time(11),
                 minimum=2,
                 maximum=3,
             )

@@ -9,10 +9,13 @@ import pytest
 
 @pytest.mark.performance
 @pytest.mark.parametrize("scarce", [False, True])
-def test_three_month_load_has_valid_result_or_clean_timeout_under_watchdog(scarce):
+@pytest.mark.parametrize("concurrent", [False, True])
+def test_three_month_load_has_valid_result_or_clean_timeout_under_watchdog(scarce, concurrent):
     args = [sys.executable, "-m", "tests.optimizer_benchmark"]
     if scarce:
         args.append("--scarce")
+    if concurrent:
+        args.append("--concurrent")
     child = subprocess.run(
         args,
         capture_output=True,

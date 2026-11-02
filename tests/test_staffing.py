@@ -14,6 +14,7 @@ from ephios_shift_coordination.publication import publish_plan
 from ephios_shift_coordination.services import Conflict
 from ephios_shift_coordination.staffing import (
     add_person,
+    options,
     remove_person,
     replacement_access,
     replacements,
@@ -89,8 +90,7 @@ def test_candidates_show_their_answer_the_possible_role_and_soft_warnings(publis
     assert member["warnings"] and not member["blocked"]
 
 
-def test_somebody_who_ruled_out_one_shift_is_no_candidate_for_it(published_data):
-    """Offering to sit in on the service does not undo a shift marked unavailable."""
+def test_red_answer_excludes_an_offered_observer_role(published_data):
     data = published_data
     data.period.rules = {**data.period.rules, "allow_observers": True}
     data.period.save()
@@ -101,7 +101,7 @@ def test_somebody_who_ruled_out_one_shift_is_no_candidate_for_it(published_data)
     response.observer_events.add(data.service)
     rows = replacements(data.service, coordinator=True)
     first = next(row for row in rows if row["planned"].pk == data.shifts[0].pk)
-    assert "coordinator" not in {row["name"] for row in first["candidates"]}
+    assert not any(row["name"] == "coordinator" for row in first["candidates"])
 
 
 def test_signing_off_warns_the_coordinators_about_a_gap(published_data):
@@ -290,3 +290,83 @@ def test_failed_self_service_keeps_the_page_and_explains_why(client, published_d
     assert response.status_code == 200
     assert b"qualifications" in response.content
     assert not LocalParticipation.objects.filter(shift=data.shifts[1].shift).exists()
+
+
+def simultaneous(data):
+    from ephios.core.models import Shift
+
+    first, second = data.shifts
+    Shift.objects.filter(pk=second.shift_id).update(
+        start_time=first.shift.start_time, end_time=first.shift.end_time
+    )
+    second.shift.refresh_from_db()
+    data.period.rules = {**data.period.rules, "allow_observers": True}
+    data.period.save()
+    for planned in (first, second):
+        planned.event.period = data.period
+    return first, second
+
+
+def test_concurrent_self_service_allows_observer_but_not_second_regular_role(published_data):
+    from ephios.core.models import QualificationGrant
+
+    data = published_data
+    phone, chat = simultaneous(data)
+    QualificationGrant.objects.create(
+        user=data.member, qualification=data.template.shifts.last().qualifications.first()
+    )
+    state = options(data.member, chat)
+    assert state["can_observe"] and not state["can_join"]
+    add_person(data.member, chat.pk, user_id=data.member.pk, observer=True)
+    assert options(data.member, chat)["can_leave"]
+    remove_person(data.member, chat.pk, user_id=data.member.pk)
+    with pytest.raises(ValidationError, match="another service"):
+        add_person(data.member, chat.pk, user_id=data.member.pk)
+    # Move the regular duty to chat, then sit in on the phone shift.
+    remove_person(data.member, phone.pk, user_id=data.member.pk)
+    add_person(data.member, phone.pk, user_id=data.member.pk, observer=True)
+    assert options(data.member, chat)["can_join"]
+    add_person(data.member, chat.pk, user_id=data.member.pk)
+    assert staffing(phone)["observers"][0]["user"] == data.member
+    assert staffing(chat)["regular"][0]["user"] == data.member
+
+
+def test_replacement_list_offers_concurrent_beisitz_without_separate_offer(published_data):
+    data = published_data
+    _phone, chat = simultaneous(data)
+    rows = replacements(data.service, coordinator=True)
+    row = next(row for row in rows if row["planned"].pk == chat.pk)
+    candidate = next(
+        candidate for candidate in row["candidates"] if candidate["user"] == data.member
+    )
+    assert candidate["observer"] and not candidate["regular"] and not candidate["blocked"]
+
+
+@pytest.mark.parametrize("other_type", [False, True])
+def test_existing_observer_conflicts_respect_event_type_and_effective_times(
+    published_data, other_type
+):
+    from tests.test_drafts import native_observer
+
+    data = published_data
+    _phone, chat = simultaneous(data)
+    existing = native_observer(data, other_type=other_type)
+    assert options(data.member, chat)["can_observe"] is other_type
+    if not other_type:
+        with pytest.raises(ValidationError, match="another service"):
+            add_person(data.member, chat.pk, user_id=data.member.pk, observer=True)
+    existing.individual_start_time = chat.shift.end_time
+    existing.individual_end_time = chat.shift.end_time + timedelta(hours=1)
+    existing.save()
+    assert options(data.member, chat)["can_observe"]
+    add_person(data.member, chat.pk, user_id=data.member.pk, observer=True)
+
+
+def test_observer_only_self_service_can_cover_multiple_simultaneous_sibling_shifts(published_data):
+    data = published_data
+    phone, chat = simultaneous(data)
+    remove_person(data.member, phone.pk, user_id=data.member.pk)
+    for planned in (phone, chat):
+        assert options(data.member, planned)["can_observe"]
+        add_person(data.member, planned.pk, user_id=data.member.pk, observer=True)
+    assert ObserverParticipation.objects.filter(user=data.member).count() == 2

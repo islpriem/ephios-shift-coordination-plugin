@@ -90,7 +90,7 @@ print(json.dumps({'period': period.pk, 'shift': period.events.first().shifts.fir
             first.get_by_role("button", name="Hinweise", exact=False).click()
             card = first.locator(f'[data-shift-card="{sid}"]')
             card.get_by_label(
-                "Person hinzufügen, die diese Schicht nicht angeboten hat"
+                "Person auswählen, um sie hinzuzufügen oder ihre Rolle zu ändern"
             ).select_option(str(setup["people"]["3"]))
             card.get_by_role("button", name="Person hinzufügen", exact=True).click()
             # One banner for every exception, and the rule violations are marked in place.

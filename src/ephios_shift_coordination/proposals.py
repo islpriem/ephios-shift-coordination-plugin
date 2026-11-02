@@ -30,7 +30,8 @@ def create_proposal(user, period_id, *, expected_version, fingerprint):
     )
     output["message"] = {
         Status.OPTIMAL_PRIMARY: _(
-            "Full staffing, yellow assignments and strong preferences are optimized. "
+            "Staffed shifts, fewer sitting-in assignments, fewer yellow assignments and "
+            "strong preferences are optimized in that order. "
             "Partner variety is a heuristic improvement."
         ),
         Status.FEASIBLE_TIMEOUT: _(
